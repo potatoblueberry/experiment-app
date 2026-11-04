@@ -33,6 +33,13 @@ explain what you are doing in plain terms as you go, and say what you install an
 5. **Honest report** at the end: effect vs. baseline, adjusted for trend and day-of-week,
    with an uncertainty band.
 
+### Methodology reference
+
+`docs/EXPERIMENT_METHODOLOGY.md` is the authority on what makes an experiment trustworthy
+(confounders, clean baseline rules, crossover/reversal designs, analysis rules, verdict
+tiers) and lists the resulting features in priority order. Read it before changing a
+protocol, the wizard gates, or `estimateEffect`.
+
 ### Two different "baselines" (important design decision)
 
 - The **personal baseline model** (`src/domain/stats.ts`, `buildBaselineModel`) uses *all*
@@ -137,6 +144,7 @@ src/theme/                  colours, spacing, typography, phase colours
 src/utils/dates.ts          'YYYY-MM-DD' helpers (never pass Date objects around)
 src/**/__tests__/           jest unit tests (dates, stats, phases, seed generator, repository)
 supabase/migrations/        timestamped SQL files applied with `npx supabase db push`
+docs/EXPERIMENT_METHODOLOGY.md  good-practice reference and the feature priorities it implies
 supabase/config.toml        Supabase CLI config (local stack settings; we use the hosted project)
 jest.setup.js               mocks AsyncStorage (in-memory) and expo-crypto for tests
 ```
