@@ -203,3 +203,12 @@ only translation point. Every row carries `user_id` (or reaches it through
    Bayesian or mixed model, add adherence-aware analysis (per-protocol vs. as-planned),
    and export/share a report.
 6. Health Connect (Android) and Terra as additional `DataSourceProvider`s.
+7. **Option, not scheduled (owner's idea, 2026-11-04): bundled behaviour changes.** Let the
+   wizard select several behaviours for one experiment, with a clear note that the result
+   then describes the *combination*, never any single behaviour; to isolate one, run it
+   alone later. Design sketch when the time comes: an `experiment_behaviors` table
+   (experiment_id, preset_id nullable, title, description, order) backfilled from the
+   current single fields; title = behaviours joined with " + "; suggested outcome metrics =
+   union in order, primary from the first; washout recommended if any has carry-over;
+   adherence stays one daily yes/no for the whole bundle ("did you do all of them?");
+   fake demo effects sum per preset. The one-active-experiment rule is unchanged.
