@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
 
   const user = await requireUser(req);
   if (!user) return json({ error: 'Not signed in' }, 401);
+  const { reset } = (await req.json().catch(() => ({}))) as { reset?: boolean };
   const db = serviceClient();
   const startedAt = Date.now();
 
@@ -84,6 +85,9 @@ Deno.serve(async (req) => {
       backfillDone: conn?.backfill_done ?? false,
       emptyStreak: conn?.empty_streak ?? 0,
     };
+    // `reset`: forget how far back we got, so the backward walk covers the whole history again
+    // (used after a reconnect or when new fields were added). Upserts make this safe to repeat.
+    if (reset) progress = { ...progress, syncedFrom: null, backfillDone: false, emptyStreak: 0 };
     let readings = 0;
 
     // 1. Forward (recent days)

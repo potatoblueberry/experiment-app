@@ -53,6 +53,7 @@ export async function startOuraConnect(): Promise<void> {
   else await Linking.openURL(url);
 }
 
-export function syncOura(): Promise<SyncResult> {
-  return invoke<SyncResult>('oura-sync', {});
+/** `reset` forgets the backfill progress so the whole history is walked again (new fields, reconnect). */
+export function syncOura(opts: { reset?: boolean } = {}): Promise<SyncResult> {
+  return invoke<SyncResult>('oura-sync', { reset: !!opts.reset });
 }
