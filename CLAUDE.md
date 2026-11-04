@@ -130,11 +130,13 @@ drop-in later.
 
 ## Later sessions (roadmap)
 
-1. **Supabase wiring**: apply `supabase/migrations/0001_init.sql` (tables, enums, RLS),
+1. **Supabase wiring** (project ref `cwayywolbegqsfepkfux`, EU region, created 2026-11-04;
+   Oura redirect URI = `https://cwayywolbegqsfepkfux.supabase.co/functions/v1/oura-callback`): apply `supabase/migrations/0001_init.sql` (tables, enums, RLS),
    add a service-role-only token table in 0002, write `SupabaseRepository implements
    Repository` (camelCase ↔ snake_case mapping in one place), swap it in
    `RepositoryProvider`. Keep `LocalMockRepository` for demo mode and tests.
-2. **Oura OAuth2** (API v2): Edge Function handles the OAuth code exchange and token
+2. **Oura OAuth2** (API v2; app registered 2026-11-04 with scopes daily, heartrate, tag;
+   client secret lives only in the owner's password manager and Supabase function secrets): Edge Function handles the OAuth code exchange and token
    refresh; store tokens server-side only. Initial backfill pulls as much history as the
    account has (daily_sleep, daily_readiness, daily_activity, heartrate/HRV summaries,
    temperature deviation), then a scheduled incremental sync.
