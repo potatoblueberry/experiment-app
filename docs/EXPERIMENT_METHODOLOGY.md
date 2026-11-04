@@ -153,6 +153,7 @@ answer, but the gate must work without it.
 | 10 | **Autocorrelation-aware uncertainty** (block bootstrap) | Current bands are too narrow | Planned |
 | 11 | Optional pre-start checklist, optional stress rating / notes | Raise confidence for users who want to | Later, always optional |
 | 12 | Blinded preliminary results; replication prompt and combining two trials | Expectation control; the real test | Later |
+| 13 | **Design chooser with validity ranking** (owner's idea, 2026-11-04, not scheduled): offer the ways a protocol can be run (one block; one block + washout; crossover; rotating/alternating blocks) and give each a validity score computed from the protocol's carry-over time, the user's data (noise, coverage, autocorrelation), the chosen length and the expected minimal effect, then rank them best to worst with the burden of each spelled out | Lets the user trade rigor for convenience with eyes open; the score also feeds the verdict tier | Idea only |
 
 Already in place: objective outcomes only, one experiment at a time, one source per
 metric, run-in phases, 4–8 week retrospective baseline, overlap check against earlier

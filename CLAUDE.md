@@ -90,6 +90,8 @@ npx supabase link --project-ref cwayywolbegqsfepkfux
 npx supabase db push --remote   # applies supabase/migrations/*.sql not yet applied to the hosted project
 npx supabase functions deploy --use-api --remote=cwayywolbegqsfepkfux        # all Edge Functions
 npx supabase secrets set --remote=cwayywolbegqsfepkfux OURA_CLIENT_ID=... OURA_CLIENT_SECRET=...
+npx supabase secrets set --remote=cwayywolbegqsfepkfux CRON_SECRET=<long random string>
+# ...and the same string in SQL editor: select vault.create_secret('<string>', 'oura_cron_secret');
 # Hosted changes ask for confirmation; the CLI refuses to answer it in an agent run, so the
 # owner runs these three in a terminal (or re-runs with --yes after agreeing).
 
@@ -126,8 +128,9 @@ src/auth/AuthProvider.tsx   session state: loading | signed_out | signed_in | de
 src/lib/supabase.ts         the Supabase client (null when .env has no keys)
 src/lib/oura.ts             startOuraConnect() / syncOura() -> Edge Functions
 src/components/sources/     OuraPanel: connect, sync now, first import after ?oura=connected
-supabase/functions/         Deno Edge Functions: _shared (oura.ts, mapReadings.ts),
-                            oura-connect, oura-callback, oura-sync
+supabase/functions/         Deno Edge Functions: _shared (oura.ts, sync.ts, mapReadings.ts,
+                            flags.ts, backfill.ts), oura-connect, oura-callback, oura-sync
+                            (user), oura-sync-all (pg_cron every 15 min, x-cron-secret)
 src/data/
   repository.ts             the Repository interface — the ONLY door to data
   LocalMockRepository.ts    AsyncStorage implementation, seeds the demo set on first run
@@ -216,8 +219,11 @@ only translation point. Every row carries `user_id` (or reaches it through
    15 years. Done 2026-11-04 (methodology §8 items 1–2): `stress` scope requested, 15
    metrics imported (sleep latency, awake time, sleep HR, respiratory rate, bedtime, daytime
    stress, active calories, hidden tz_offset), automatic illness/travel flags computed per
-   synced window into `day_flags` (`_shared/flags.ts`). Still to do: Oura tags → manual
-   flags; a scheduled nightly sync (pg_cron or cron-triggered function); `heartrate` series.
+   synced window into `day_flags` (`_shared/flags.ts`). Scheduled sync done 2026-11-04:
+   migration 0008 (pg_cron + pg_net → `trigger_oura_sync_all()` → `oura-sync-all`, secret in
+   Vault as `oura_cron_secret` and as function secret `CRON_SECRET`); users stale > 8 h are
+   synced, 10 per run, 20 s budget each. Still to do: Oura tags → manual flags; `heartrate`
+   series.
 3. **Real sync + flags**: detect illness (temperature deviation spike) and travel
    automatically and set `MetricReading.flags`; let the user mark/unmark days.
 4. **Push reminders**: `expo-notifications`, one evening reminder per day while any
@@ -235,3 +241,8 @@ only translation point. Every row carries `user_id` (or reaches it through
    union in order, primary from the first; washout recommended if any has carry-over;
    adherence stays one daily yes/no for the whole bundle ("did you do all of them?");
    fake demo effects sum per preset. The one-active-experiment rule is unchanged.
+8. **Option, not scheduled (owner's idea, 2026-11-04): design chooser with validity ranking.**
+   In the wizard, offer the ways a protocol can be run (one block, block + washout,
+   crossover, rotating blocks), compute a validity score per design from carry-over time,
+   the user's own noise/coverage/autocorrelation, the length and the minimal effect of
+   interest, and rank them with each design's burden stated. See methodology §8 item 13.
