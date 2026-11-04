@@ -41,6 +41,11 @@ describe('computeAutoFlags', () => {
     expect(out.every((f) => f.flags.includes('travel'))).toBe(true);
   });
 
+  it('ignores daylight-saving shifts of one hour', () => {
+    const rows = series('tz_offset', from, 35, (i) => (i >= 30 ? 2 : 3));
+    expect(computeAutoFlags(rows, window.from, window.to)).toEqual([]);
+  });
+
   it('is quiet on ordinary days', () => {
     const rows = [
       ...series('temp_deviation', from, 35, (i) => ((i % 7) - 3) * 0.05),

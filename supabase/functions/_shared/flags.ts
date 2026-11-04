@@ -30,6 +30,8 @@ const RHR_RISE = 3; // bpm above the 28-day median
 const RESP_RISE = 1.0; // breaths/min above the 28-day median
 const HRV_DROP = 0.8; // fraction of the 28-day median
 const JETLAG_DAYS = 2;
+/** Daylight-saving switches move the offset by exactly 1 h and are not travel; a 1 h trip barely disturbs sleep either. */
+const MIN_TZ_CHANGE_H = 2;
 
 function addDays(date: string, days: number): string {
   const d = new Date(date + 'T00:00:00Z');
@@ -102,7 +104,7 @@ export function computeAutoFlags(rows: FlagInput[], from: string, to: string): D
     const offset = tz?.get(d);
     if (offset !== undefined) {
       const prev = priorValues(tz, d, 3)[0];
-      if (prev !== undefined && Math.abs(offset - prev) >= 0.5) {
+      if (prev !== undefined && Math.abs(offset - prev) >= MIN_TZ_CHANGE_H) {
         for (let k = 0; k <= JETLAG_DAYS; k++) travelDays.add(addDays(d, k));
       }
     }
