@@ -36,9 +36,12 @@ explain what you are doing in plain terms as you go, and say what you install an
 ### Methodology reference
 
 `docs/EXPERIMENT_METHODOLOGY.md` is the authority on what makes an experiment trustworthy
-(confounders, clean baseline rules, crossover/reversal designs, analysis rules, verdict
-tiers) and lists the resulting features in priority order. Read it before changing a
-protocol, the wizard gates, or `estimateEffect`.
+and lists the resulting features in priority order. Governing principle (owner, 2026-11-04):
+**automatic first, input optional**. Rigor must come from design (crossover, reversal,
+run-in), ring-derived confounders (illness, travel, daytime stress, activity, sleep
+regularity), data-driven baseline checks and calibrated statistics; diaries and surveys are
+optional extras. Adherence is the only input, to be reduced to exception reporting. Read the
+document before changing a protocol, the wizard gates, the Oura sync fields, or `estimateEffect`.
 
 ### Two different "baselines" (important design decision)
 
@@ -209,8 +212,10 @@ only translation point. Every row carries `user_id` (or reaches it through
    `synced_from` / `empty_streak` / `backfill_done` after every chunk (migration 0004,
    planning in `_shared/backfill.ts`). The app keeps calling while `backfillDone` is false,
    so any length of history imports in rounds; it stops after ~1 year of empty chunks or at
-   15 years. Still to do: a scheduled nightly sync (pg_cron or a cron-triggered function),
-   `heartrate` time series, Oura tags → `flags`.
+   15 years. Still to do (methodology §8): request the `stress` scope and import daily_stress,
+   sleep latency, awake time, average sleep HR, bedtime_start, respiratory rate and time-zone
+   offset; automatic illness/travel flags; Oura tags → `flags`; a scheduled nightly sync
+   (pg_cron or cron-triggered function); `heartrate` series.
 3. **Real sync + flags**: detect illness (temperature deviation spike) and travel
    automatically and set `MetricReading.flags`; let the user mark/unmark days.
 4. **Push reminders**: `expo-notifications`, one evening reminder per day while any
