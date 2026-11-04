@@ -157,7 +157,8 @@ jest.setup.js               mocks AsyncStorage (in-memory) and expo-crypto for t
 | TS type                   | table                      | notes                                        |
 |---------------------------|----------------------------|----------------------------------------------|
 | `MetricDefinition`        | metric_definitions         | reference data, see `METRICS`                |
-| `MetricReading`           | metric_readings            | UNIQUE (user_id, metric_id, date); `flags[]` |
+| `MetricReading`           | metric_readings            | UNIQUE (user_id, metric_id, date); `flags[]` (mock) |
+| (merged into `flags`)     | day_flags                  | one row per flagged day, `source` auto/manual; SupabaseRepository merges into readings |
 | `Experiment`              | experiments                | `startDate` = first intervention day         |
 | `ExperimentPhase`         | experiment_phases          | baseline / intervention / washout, ordered   |
 | `ExperimentOutcomeMetric` | experiment_outcome_metrics | one `isPrimary`                              |
@@ -212,10 +213,11 @@ only translation point. Every row carries `user_id` (or reaches it through
    `synced_from` / `empty_streak` / `backfill_done` after every chunk (migration 0004,
    planning in `_shared/backfill.ts`). The app keeps calling while `backfillDone` is false,
    so any length of history imports in rounds; it stops after ~1 year of empty chunks or at
-   15 years. Still to do (methodology §8): request the `stress` scope and import daily_stress,
-   sleep latency, awake time, average sleep HR, bedtime_start, respiratory rate and time-zone
-   offset; automatic illness/travel flags; Oura tags → `flags`; a scheduled nightly sync
-   (pg_cron or cron-triggered function); `heartrate` series.
+   15 years. Done 2026-11-04 (methodology §8 items 1–2): `stress` scope requested, 15
+   metrics imported (sleep latency, awake time, sleep HR, respiratory rate, bedtime, daytime
+   stress, active calories, hidden tz_offset), automatic illness/travel flags computed per
+   synced window into `day_flags` (`_shared/flags.ts`). Still to do: Oura tags → manual
+   flags; a scheduled nightly sync (pg_cron or cron-triggered function); `heartrate` series.
 3. **Real sync + flags**: detect illness (temperature deviation spike) and travel
    automatically and set `MetricReading.flags`; let the user mark/unmark days.
 4. **Push reminders**: `expo-notifications`, one evening reminder per day while any

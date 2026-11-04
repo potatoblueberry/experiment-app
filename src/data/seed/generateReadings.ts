@@ -138,6 +138,14 @@ export function generateReadings({ endDate, days = 365, seed = 20241104, effectW
       30000,
     );
     const temp = clamp(0.04 * seasonal - 0.05 * recovery + gaussian(rng) * 0.18 + ill * 0.75 + eff('temp_deviation'), -1.5, 2.5);
+    const latency = clamp(11 + gaussian(rng) * 5 + (lateNight ? 6 : 0) + ill * 5 + eff('sleep_latency'), 1, 60);
+    const awake = clamp(34 + gaussian(rng) * 12 - 3 * recovery + (lateNight ? 10 : 0) + ill * 15 + (away ? 10 : 0) + eff('awake_time'), 2, 150);
+    const sleepHr = clamp(rhr + 4.5 + gaussian(rng) * 1.2 + (lateNight ? 3 : 0) + eff('sleep_hr'), 40, 95);
+    const breath = clamp(14.4 + 0.1 * seasonal + gaussian(rng) * 0.35 + ill * 1.4 + eff('respiratory_rate'), 10, 22);
+    const bedtime = clamp(23.3 + (weekendMorning ? 0.5 : 0) + (lateNight ? 1.4 : 0) + gaussian(rng) * 0.45 + eff('bedtime'), 20, 29);
+    const stress = clamp(85 + 25 * Math.sin(i / 9) - 12 * recovery + gaussian(rng) * 30 + (wd >= 5 ? -30 : 0) + eff('daytime_stress'), 0, 400);
+    const activeCal = clamp(380 + steps / 25 + gaussian(rng) * 90 - ill * 200 + eff('active_calories'), 50, 2000);
+    const tzOffset = away ? -5 : 2;
 
     const push = (metricId: MetricId, value: number) =>
       out.push({ id: makeId(), userId, metricId, date, value, source: 'oura', flags: [...flags], syncedAt });
@@ -149,6 +157,14 @@ export function generateReadings({ endDate, days = 365, seed = 20241104, effectW
     push('readiness', Math.round(readiness));
     if (rng() > 0.02) push('steps', Math.round(steps)); // steps occasionally missing on their own
     push('temp_deviation', Math.round(temp * 100) / 100);
+    push('sleep_latency', Math.round(latency));
+    push('awake_time', Math.round(awake));
+    push('sleep_hr', Math.round(sleepHr * 10) / 10);
+    push('respiratory_rate', Math.round(breath * 10) / 10);
+    push('bedtime', Math.round(bedtime * 100) / 100);
+    push('daytime_stress', Math.round(stress));
+    push('active_calories', Math.round(activeCal));
+    push('tz_offset', tzOffset);
   }
   return out;
 }
@@ -161,6 +177,6 @@ export function generateReadings({ endDate, days = 365, seed = 20241104, effectW
  */
 export const PRESET_FAKE_EFFECTS: Record<string, Partial<Record<MetricId, number>>> = {
   morning_sunlight: { readiness: 4, sleep_duration: 0.2, sleep_efficiency: 1.5 },
-  no_caffeine: { sleep_efficiency: 3, sleep_duration: 0.3, resting_hr: -1.5, hrv: 2 },
+  no_caffeine: { sleep_efficiency: 3, sleep_duration: 0.3, resting_hr: -1.5, hrv: 2, sleep_latency: -4, awake_time: -8, sleep_hr: -2 },
   daily_sauna: { hrv: 4, resting_hr: -2, sleep_duration: 0.1 },
 };

@@ -43,11 +43,13 @@ sleep?". Every other element translates, and most of it needs no input.
 
 ## 3. Lever 1: design (zero input)
 
-- **Crossover is the default** for behaviours with short carry-over, caffeine included:
-  on / off / on / off in blocks of about two weeks, block order randomised by the app, the
-  first 5–7 days after every switch marked run-in and excluded. A slow confounder such as a
-  stressful month cannot stay aligned with a condition that flips every two weeks. Total
-  length ≈ 8 weeks, no longer than one abstinence block today.
+- **Default design: one block.** Run-in, then a set intervention length, then an optional
+  washout (owner decision 2026-11-04: most users will not alternate on/off blocks, and the
+  exact protocol settings are to be decided later). **Crossover is an option**, offered
+  for behaviours with short carry-over: on / off / on / off in blocks of about two weeks,
+  order randomised, the first 5–7 days after every switch excluded as run-in. It is the
+  strongest zero-input defence against slow confounders, so the report should state which
+  design was used and tier the verdict accordingly.
 - **Reversal (ABA) is the minimum** for reversible behaviours. The washout phase is not
   decoration: the metric is expected to return towards baseline, and that return is
   reported as evidence.
@@ -139,9 +141,9 @@ answer, but the gate must work without it.
 
 | # | Feature | Why | Status |
 |---|---|---|---|
-| 1 | **Oura: add the `stress` scope; import daily_stress, sleep latency, awake time, average sleep HR, bedtime_start, respiratory rate, time zone offset** | Raw material for every automatic confounder and signature check | Planned (Oura app settings + sync mapping) |
-| 2 | **Automatic flags**: illness (temperature + HR + respiratory rate + HRV), travel (time zone offset / bedtime shift) | Exclusion without a diary | Planned |
-| 3 | **Crossover design** with randomised blocks and run-in after every switch; make it the caffeine default | Strongest zero-input defence against slow confounders | Planned (phase builder + wizard + estimator per block) |
+| 1 | **Oura: add the `stress` scope; import daily_stress, sleep latency, awake time, average sleep HR, bedtime_start, respiratory rate, time zone offset** | Raw material for every automatic confounder and signature check | **Done 2026-11-04** |
+| 2 | **Automatic flags**: illness (temperature + HR + respiratory rate + HRV), travel (time zone offset / bedtime shift) | Exclusion without a diary | **Done 2026-11-04** (thresholds in `_shared/flags.ts`, to be tuned on real data) |
+| 3 | **Crossover design** as an optional alternative with randomised blocks and run-in after every switch (not the default) | Strongest zero-input defence against slow confounders, for users who accept it | Planned (phase builder + wizard + estimator per block) |
 | 4 | **Balance check + verdict tiers** in the report | "Stress was higher during the intervention" instead of a green badge | Planned |
 | 5 | **Placebo start-date test** | Calibrated probability from the person's own noise | Planned (pure function in stats.ts) |
 | 6 | **Baseline representativeness + change-point gate**, prospective-baseline fallback | Clean baseline without questions | Partly (coverage/flags/overlap exist) |

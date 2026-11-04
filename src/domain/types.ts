@@ -15,11 +15,19 @@ export type UUID = string;
 export type MetricId =
   | 'sleep_duration'
   | 'sleep_efficiency'
+  | 'sleep_latency'
+  | 'awake_time'
   | 'hrv'
   | 'resting_hr'
+  | 'sleep_hr'
+  | 'respiratory_rate'
   | 'readiness'
+  | 'bedtime'
+  | 'daytime_stress'
   | 'steps'
-  | 'temp_deviation';
+  | 'active_calories'
+  | 'temp_deviation'
+  | 'tz_offset';
 
 /** table: metric_definitions (reference data, same for every user) */
 export interface MetricDefinition {
@@ -31,6 +39,8 @@ export interface MetricDefinition {
   /** null = neutral, e.g. temperature deviation where 0 is ideal */
   higherIsBetter: boolean | null;
   description: string;
+  /** Stored and used internally (e.g. by automatic flags) but never shown as a chart. */
+  hidden?: boolean;
 }
 
 export type DataSourceProvider = 'oura' | 'manual';

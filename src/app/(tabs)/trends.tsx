@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { MetricLineChart, WeekdayBars, type ChartBand, type ChartFlag, type ChartMarker } from '../../components/charts';
 import { AppText, Card, Chip, InfoBox, Legend, Row, Screen, SegmentedControl, Stat } from '../../components/ui';
-import { formatMetricDelta, formatMetricValue, METRIC_IDS, METRICS } from '../../domain/metrics';
+import { formatMetricDelta, formatMetricValue, METRICS, VISIBLE_METRIC_IDS } from '../../domain/metrics';
 import { buildBaselineModel, toPoints } from '../../domain/stats';
 import type { MetricId } from '../../domain/types';
 import { useExperiments, useReadings } from '../../hooks/useData';
@@ -29,7 +29,7 @@ export default function TrendsScreen() {
   const [seenParam, setSeenParam] = useState(params.metric);
   if (params.metric !== seenParam) {
     setSeenParam(params.metric);
-    if (params.metric && METRIC_IDS.includes(params.metric as MetricId)) setMetricId(params.metric as MetricId);
+    if (params.metric && VISIBLE_METRIC_IDS.includes(params.metric as MetricId)) setMetricId(params.metric as MetricId);
   }
 
   const readings = useReadings([metricId]);
@@ -62,7 +62,7 @@ export default function TrendsScreen() {
   return (
     <Screen title="Trends" subtitle="One metric at a time, with the 7-day average smoothing out night-to-night noise.">
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }} style={{ marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg }}>
-        {METRIC_IDS.map((id) => (
+        {VISIBLE_METRIC_IDS.map((id) => (
           <Chip key={id} label={METRICS[id].shortName} selected={id === metricId} onPress={() => setMetricId(id)} />
         ))}
         <View style={{ width: spacing.lg }} />

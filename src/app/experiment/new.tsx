@@ -14,7 +14,7 @@ import { ExperimentCard } from '../../components/experiments';
 import { AppText, Badge, Button, Card, Chip, InfoBox, Row, Screen, SegmentedControl } from '../../components/ui';
 import { useRepository } from '../../data/RepositoryProvider';
 import { allowedWeeks, BEHAVIOR_PRESETS, getPreset, suggestedOutcomeMetrics } from '../../domain/behaviors';
-import { METRIC_LIST, METRICS, metricProvider, PROVIDER_NAMES } from '../../domain/metrics';
+import { METRICS, metricProvider, PROVIDER_NAMES, VISIBLE_METRIC_LIST } from '../../domain/metrics';
 import { buildPhasePlan, DEFAULT_WASHOUT_DAYS, durationExplanation, INTERVENTION_WEEK_OPTIONS, recommendBaselineDays } from '../../domain/phases';
 import { ONE_ACTIVE_EXPERIMENT_MESSAGE } from '../../domain/rules';
 import { findBaselineContamination } from '../../domain/stats';
@@ -53,9 +53,9 @@ export default function NewExperimentScreen() {
   // Which connected source supplies each metric (null = no data would arrive).
   const providerOf = useMemo(() => {
     const list = sources.data ?? [];
-    return Object.fromEntries(METRIC_LIST.map((d) => [d.id, metricProvider(d.id, list)])) as Record<MetricId, ReturnType<typeof metricProvider>>;
+    return Object.fromEntries(VISIBLE_METRIC_LIST.map((d) => [d.id, metricProvider(d.id, list)])) as Record<MetricId, ReturnType<typeof metricProvider>>;
   }, [sources.data]);
-  const noSourceAtAll = !!sources.data && METRIC_LIST.every((d) => providerOf[d.id] === null);
+  const noSourceAtAll = !!sources.data && VISIBLE_METRIC_LIST.every((d) => providerOf[d.id] === null);
   const primaryHasSource = primary ? providerOf[primary.metricId] !== null : false;
 
   const baseline = useMemo(
@@ -209,7 +209,7 @@ export default function NewExperimentScreen() {
             {preset.rationale} The primary outcome is set by the protocol; add or remove secondary metrics as you like. Fewer is better: every extra metric adds a chance of a false positive.
           </AppText>
           <Card padding={0}>
-            {METRIC_LIST.map((def, i) => {
+            {VISIBLE_METRIC_LIST.map((def, i) => {
               const sel = form.outcomeMetrics.find((m) => m.metricId === def.id);
               const provider = providerOf[def.id];
               const locked = sel?.isPrimary === true;

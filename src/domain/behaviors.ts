@@ -65,8 +65,9 @@ export const BEHAVIOR_PRESETS: BehaviorPreset[] = [
     description: 'No coffee, tea, energy drinks or other caffeine at any time of day.',
     suggestedMetrics: [
       { metricId: 'sleep_efficiency', direction: 'increase' },
-      { metricId: 'sleep_duration', direction: 'increase' },
-      { metricId: 'resting_hr', direction: 'decrease' },
+      { metricId: 'sleep_latency', direction: 'decrease' },
+      { metricId: 'awake_time', direction: 'decrease' },
+      { metricId: 'sleep_hr', direction: 'decrease' },
       { metricId: 'hrv', direction: 'increase' },
     ],
     runInDays: 7,
@@ -74,7 +75,7 @@ export const BEHAVIOR_PRESETS: BehaviorPreset[] = [
     minWeeks: 4,
     defaultWeeks: 6,
     washout: 'recommended',
-    rationale: 'Caffeine has a long half-life, so even morning intake fragments sleep and keeps the night-time heart rate up.',
+    rationale: 'Caffeine has a long half-life: it delays falling asleep, fragments the night and keeps the sleeping heart rate up. Those four should move together.',
     rules: ['1-week withdrawal period first, not counted', 'Then at least 4 weeks caffeine-free', 'Washout recommended: reintroduce and watch the effect reverse'],
   }),
   preset({

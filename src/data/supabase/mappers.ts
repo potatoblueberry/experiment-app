@@ -89,6 +89,13 @@ export interface AdherenceLogRow {
   logged_at: string;
 }
 
+export interface DayFlagsRow {
+  user_id: string;
+  date: string;
+  flags: ReadingFlag[];
+  source: 'auto' | 'manual';
+}
+
 export interface ExperimentRowWithChildren extends ExperimentRow {
   experiment_phases: ExperimentPhaseRow[];
   experiment_outcome_metrics: ExperimentOutcomeMetricRow[];

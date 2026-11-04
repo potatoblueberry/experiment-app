@@ -27,7 +27,7 @@ import type { Repository } from './repository';
 import { buildDemoSeed, effectWindowsFor, materializeExperiment, stripDetail, uuid } from './seed/demoSeed';
 import { DEMO_USER_ID, generateReadings } from './seed/generateReadings';
 
-const SEED_VERSION = 5; // bumped 2026-11-04: preset rename + one-active-experiment rule
+const SEED_VERSION = 6; // bumped 2026-11-04: new Oura metrics in the demo set
 const KEY = 'n1lab:v1';
 const KEYS = {
   meta: `${KEY}:meta`,

@@ -7,7 +7,7 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 export const OURA_AUTHORIZE_URL = 'https://cloud.ouraring.com/oauth/authorize';
 export const OURA_TOKEN_URL = 'https://api.ouraring.com/oauth/token';
 export const OURA_API = 'https://api.ouraring.com/v2/usercollection';
-export const OURA_SCOPES = 'daily heartrate tag';
+export const OURA_SCOPES = 'daily heartrate tag stress';
 export const STATE_MAX_AGE_MS = 15 * 60 * 1000;
 
 export const corsHeaders = {
@@ -130,7 +130,13 @@ export class OuraAuthError extends Error {
 }
 
 /** GET one Oura collection for a date range, following next_token pages. */
-export async function fetchCollection<T>(accessToken: string, collection: string, startDate: string, endDate: string): Promise<T[]> {
+export async function fetchCollection<T>(
+  accessToken: string,
+  collection: string,
+  startDate: string,
+  endDate: string,
+  opts: { optional?: boolean } = {},
+): Promise<T[]> {
   const out: T[] = [];
   let nextToken: string | undefined;
   for (let page = 0; page < 50; page++) {
@@ -139,6 +145,8 @@ export async function fetchCollection<T>(accessToken: string, collection: string
     url.searchParams.set('end_date', endDate);
     if (nextToken) url.searchParams.set('next_token', nextToken);
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}`, 'User-Agent': 'N1Lab/0.1' } });
+    // 403 on an optional collection = scope not granted yet; skip quietly.
+    if (res.status === 403 && opts.optional) return out;
     if (res.status === 401 || res.status === 403) throw new OuraAuthError(`Oura rejected the token (${res.status}). Reconnect Oura.`);
     if (res.status === 429) throw new Error('Oura rate limit reached; try again in a few minutes.');
     if (!res.ok) throw new Error(`Oura ${collection} ${res.status}: ${(await res.text()).slice(0, 200)}`);

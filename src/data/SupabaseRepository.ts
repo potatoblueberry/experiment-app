@@ -40,6 +40,7 @@ import {
   type AdherenceLogRow,
   type DataSourceConnectionRow,
   type ExperimentRow,
+  type DayFlagsRow,
   type ExperimentRowWithChildren,
   type MetricReadingRow,
 } from './supabase/mappers';
@@ -80,6 +81,17 @@ export class SupabaseRepository implements Repository {
   }
 
   async getReadings(query: ReadingQuery = {}): Promise<MetricReading[]> {
+    const [out, flags] = await Promise.all([this.loadReadingRows(query), this.loadDayFlags(query)]);
+    if (flags.size === 0) return out;
+    // Flags are stored once per day (day_flags); merge them into every reading of that day.
+    return out.map((r) => {
+      const extra = flags.get(r.date);
+      if (!extra) return r;
+      return { ...r, flags: Array.from(new Set([...r.flags, ...extra])) };
+    });
+  }
+
+  private async loadReadingRows(query: ReadingQuery): Promise<MetricReading[]> {
     const out: MetricReading[] = [];
     for (let offset = 0; ; offset += PAGE) {
       let q = this.client.from('metric_readings').select('*').order('date').order('metric_id').range(offset, offset + PAGE - 1);
@@ -91,6 +103,17 @@ export class SupabaseRepository implements Repository {
       if (rows.length < PAGE) break;
     }
     return out;
+  }
+
+  /** date -> union of automatic and manual flags. Only flagged days are stored, so this stays small. */
+  private async loadDayFlags(query: ReadingQuery): Promise<Map<string, MetricReading['flags']>> {
+    let q = this.client.from('day_flags').select('*').order('date').range(0, PAGE - 1);
+    if (query.from) q = q.gte('date', query.from);
+    if (query.to) q = q.lte('date', query.to);
+    const rows = unwrap(await q, 'load day flags') as DayFlagsRow[];
+    const map = new Map<string, MetricReading['flags']>();
+    for (const r of rows) map.set(r.date, Array.from(new Set([...(map.get(r.date) ?? []), ...r.flags])));
+    return map;
   }
 
   async listExperiments(filter?: { status?: ExperimentStatus[] }): Promise<Experiment[]> {
@@ -175,7 +198,7 @@ export class SupabaseRepository implements Repository {
 
   private async deleteAllOwnData(): Promise<void> {
     // Experiments cascade to phases, outcome metrics and adherence logs.
-    for (const table of ['experiments', 'metric_readings', 'data_source_connections'] as const) {
+    for (const table of ['experiments', 'metric_readings', 'day_flags', 'data_source_connections'] as const) {
       const res = await this.client.from(table).delete().eq('user_id', this.userId);
       if (res.error) throw new Error(`clear ${table}: ${res.error.message}`);
     }
