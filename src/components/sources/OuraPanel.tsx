@@ -11,7 +11,7 @@ import { useRepository } from '../../data/RepositoryProvider';
 import type { DataSourceConnection } from '../../domain/types';
 import { startOuraConnect, syncOura } from '../../lib/oura';
 import { spacing } from '../../theme';
-import { formatShort } from '../../utils/dates';
+import { formatMedium } from '../../utils/dates';
 import { SourceCard } from '../experiments';
 import { AppText, Button, Card, InfoBox, Row } from '../ui';
 
@@ -71,9 +71,9 @@ export function OuraPanel({ sources, readingDays }: { sources: DataSourceConnect
       .then((r) => {
         if (cancelled) return;
         const imported = job.imported + r.readings;
-        const range = r.syncedFrom && r.syncedThrough ? `${formatShort(r.syncedFrom)} – ${formatShort(r.syncedThrough)}` : '';
+        const range = r.syncedFrom && r.syncedThrough ? `${formatMedium(r.syncedFrom)} – ${formatMedium(r.syncedThrough)}` : '';
         if (!r.backfillDone && job.calls + 1 < MAX_CALLS) {
-          setJob({ ...job, calls: job.calls + 1, imported, message: `${imported} readings so far, back to ${r.syncedFrom ? formatShort(r.syncedFrom) : '…'}. Looking for older data…` });
+          setJob({ ...job, calls: job.calls + 1, imported, message: `${imported} readings so far, back to ${r.syncedFrom ? formatMedium(r.syncedFrom) : '…'}. Looking for older data…` });
         } else {
           setJob({ ...job, status: 'done', imported, message: `Imported ${imported} readings. History covers ${range}.` });
         }
@@ -128,7 +128,7 @@ export function OuraPanel({ sources, readingDays }: { sources: DataSourceConnect
         <Row style={{ justifyContent: 'space-between' }}>
           <AppText variant="caption" color="textSecondary" style={{ flex: 1 }}>
             {oura?.syncedThrough
-              ? `History ${oura.syncedFrom ? formatShort(oura.syncedFrom) : '?'} – ${formatShort(oura.syncedThrough)}${oura.backfillDone ? '' : ' (older data still importing)'}`
+              ? `History ${oura.syncedFrom ? formatMedium(oura.syncedFrom) : '?'} – ${formatMedium(oura.syncedThrough)}${oura.backfillDone ? '' : ' (older data still importing)'}`
               : 'Not synced yet.'}
           </AppText>
           <Button label={running ? 'Syncing…' : 'Sync now'} variant="secondary" size="sm" icon="sync-outline" loading={running} onPress={() => setJob({ key: `manual-${Date.now()}`, status: 'running', imported: 0, calls: 0 })} />
