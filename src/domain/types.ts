@@ -59,7 +59,8 @@ export type DesignType = 'AB' | 'ABA';
 export type ExperimentStatus = 'active' | 'completed' | 'abandoned';
 /** Only daily yes/no for now; room for 'daily_count' or 'daily_duration' later. */
 export type AdherenceType = 'daily_boolean';
-export type PhaseType = 'baseline' | 'intervention' | 'washout';
+/** run_in = adaptation/withdrawal days: behaviour followed and logged, but not counted as intervention. */
+export type PhaseType = 'baseline' | 'run_in' | 'intervention' | 'washout';
 export type ExpectedDirection = 'increase' | 'decrease' | 'any';
 
 /** table: experiments */
@@ -72,7 +73,7 @@ export interface Experiment {
   adherenceType: AdherenceType;
   designType: DesignType;
   status: ExperimentStatus;
-  /** First day of the intervention phase. */
+  /** First day the behaviour starts (the run-in phase if the protocol has one, otherwise the intervention). */
   startDate: ISODate;
   /** Planned last day of the final phase. */
   endDate: ISODate;
@@ -148,6 +149,8 @@ export interface CreateExperimentInput {
   designType: DesignType;
   startDate: ISODate;
   baselineDays: number;
+  /** Adaptation/withdrawal days before the counted intervention; 0 or omitted = none. */
+  runInDays?: number;
   interventionDays: number;
   /** Only used for ABA designs. */
   washoutDays?: number;

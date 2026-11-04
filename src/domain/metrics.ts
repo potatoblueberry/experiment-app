@@ -1,4 +1,4 @@
-import type { MetricDefinition, MetricId } from './types';
+import type { DataSourceConnection, DataSourceProvider, MetricDefinition, MetricId } from './types';
 
 /**
  * The metric catalog. Mirrors the future metric_definitions table. Order here is
@@ -115,4 +115,28 @@ export function formatAxisValue(metricId: MetricId, value: number): string {
   if (metricId === 'temp_deviation') return (value > 0 ? '+' : '') + value.toFixed(1);
   const def = METRICS[metricId];
   return value.toFixed(Math.min(def.decimals, 1));
+}
+
+// ---------------------------------------------------------------------------
+// Which data source supplies which metric
+// ---------------------------------------------------------------------------
+
+/** Metrics each provider can deliver. Order of PROVIDER_PRIORITY decides when several could. */
+export const PROVIDER_METRICS: Record<DataSourceProvider, MetricId[]> = {
+  oura: ['sleep_duration', 'sleep_efficiency', 'hrv', 'resting_hr', 'readiness', 'steps', 'temp_deviation'],
+  manual: [],
+};
+
+export const PROVIDER_PRIORITY: DataSourceProvider[] = ['oura', 'manual'];
+
+export const PROVIDER_NAMES: Record<DataSourceProvider, string> = { oura: 'Oura', manual: 'Manual' };
+
+/**
+ * The single connected source a metric will come from, or null when none of the
+ * connected sources provides it. A metric never mixes sources: if two could
+ * supply it, the first in PROVIDER_PRIORITY wins.
+ */
+export function metricProvider(metricId: MetricId, sources: Pick<DataSourceConnection, 'provider' | 'status'>[]): DataSourceProvider | null {
+  const connected = new Set(sources.filter((s) => s.status === 'connected').map((s) => s.provider));
+  return PROVIDER_PRIORITY.find((p) => connected.has(p) && PROVIDER_METRICS[p].includes(metricId)) ?? null;
 }

@@ -24,6 +24,23 @@ describe('buildPhasePlan', () => {
   });
 });
 
+describe('buildPhasePlan with run-in', () => {
+  it('inserts the run-in between baseline and intervention and shifts everything after it', () => {
+    const plan = buildPhasePlan({ designType: 'ABA', startDate: '2026-11-04', baselineDays: 28, runInDays: 7, interventionDays: 28, washoutDays: 14 });
+    expect(plan.map((p) => p.type)).toEqual(['baseline', 'run_in', 'intervention', 'washout']);
+    expect(plan.map((p) => p.order)).toEqual([0, 1, 2, 3]);
+    expect(plan[0].endDate).toBe('2026-11-03');
+    expect(plan[1]).toMatchObject({ startDate: '2026-11-04', endDate: '2026-11-10' });
+    expect(plan[2]).toMatchObject({ startDate: '2026-11-11', endDate: '2026-12-08' });
+    for (let i = 1; i < plan.length; i++) expect(plan[i].startDate).toBe(addDays(plan[i - 1].endDate, 1));
+  });
+
+  it('omits the run-in phase when runInDays is 0', () => {
+    const plan = buildPhasePlan({ designType: 'AB', startDate: '2026-11-04', baselineDays: 28, runInDays: 0, interventionDays: 28 });
+    expect(plan.map((p) => p.type)).toEqual(['baseline', 'intervention']);
+  });
+});
+
 describe('recommendBaselineDays', () => {
   const start = '2026-11-04';
   const fullWindow = eachDay(addDays(start, -56), addDays(start, -1));

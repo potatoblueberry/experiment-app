@@ -9,10 +9,18 @@ explain what you are doing in plain terms as you go, and say what you install an
 1. **Connect wearables** (Oura first, later Health Connect and Terra). The app builds a
    *personal baseline model* from as much history as it can pull (a year or more): typical
    values, night-to-night variability, weekday pattern, long-term trend per metric.
-2. **Design an experiment** with a wizard: behaviour change (presets + free text) → how
-   adherence is tracked (daily yes/no for now) → proposed outcome metrics the user confirms
-   → duration → review → Start. Starting builds a proper N-of-1 structure: a *baseline
-   phase* taken from existing data, an *intervention phase*, and optionally a *washout*.
+2. **Design an experiment** from a **curated protocol** (decision 2026-11-04: the app sets
+   the scientific boundaries, the user chooses within them; no free-form behaviours).
+   A protocol (`src/domain/behaviors.ts`) fixes: an optional **run-in** (adaptation /
+   withdrawal days that are logged but not counted, e.g. 7 days for caffeine), a
+   **minimum length** in weeks, a **washout rule** (required / recommended / optional) and
+   the **primary outcome**. The user picks the length at or above the minimum, secondary
+   metrics, the start date, and washout unless required. Phases: *baseline* (from existing
+   data) → *run-in* (optional) → *intervention* → *washout* (optional). `startDate` is the
+   first behaviour day (run-in start if any). In the outcomes step every metric shows the
+   one connected source it will come from (`metricProvider` in `src/domain/metrics.ts`);
+   metrics without a source cannot be chosen and the experiment cannot start if the
+   primary has none.
 3. **Daily loop** (the heart of the app): reminder, "did you do it today?" yes/no, optional
    journal note. Past days stay editable.
 4. **One experiment at a time** (decision 2026-11-04). The app exists to attribute a change
@@ -99,8 +107,8 @@ src/app/                    screens; one file = one route (Expo Router)
   experiment/[id].tsx       detail: timeline, adherence calendar, outcome charts, effect
 src/domain/                 pure TypeScript, no React, no storage
   types.ts                  data model mirroring future DB tables
-  metrics.ts                metric catalog + formatting
-  behaviors.ts              presets + suggested outcome metrics
+  metrics.ts                metric catalog, formatting, provider→metric map (metricProvider)
+  behaviors.ts              curated protocols (run-in, min weeks, washout rule, metrics)
   phases.ts                 phase builder, baseline-window recommendation, duration copy
   stats.ts                  rolling mean, baseline model, effect estimate, baseline contamination
   rules.ts                  product rules shared by UI and repositories (one active experiment)

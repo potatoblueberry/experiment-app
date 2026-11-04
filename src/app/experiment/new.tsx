@@ -1,32 +1,32 @@
 /**
- * New Experiment wizard. Five steps held in local state; nothing is saved until
- * "Start experiment" on the review step.
+ * New experiment wizard. The app provides curated protocols with fixed
+ * scientific boundaries (run-in, minimum length, washout rule, primary outcome);
+ * the user chooses within them: length, secondary metrics, start date.
+ * "Start experiment" on the review step creates the phases from the plan.
  */
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { PhaseTimeline } from '../../components/charts';
 import { ExperimentCard } from '../../components/experiments';
 import { AppText, Badge, Button, Card, Chip, InfoBox, Row, Screen, SegmentedControl } from '../../components/ui';
 import { useRepository } from '../../data/RepositoryProvider';
-import { BEHAVIOR_PRESETS, CUSTOM_PRESET_ID, getPreset, suggestedOutcomeMetrics } from '../../domain/behaviors';
-import { METRIC_LIST, METRICS } from '../../domain/metrics';
-import { buildPhasePlan, DEFAULT_INTERVENTION_WEEKS, DEFAULT_WASHOUT_DAYS, durationExplanation, INTERVENTION_WEEK_OPTIONS, recommendBaselineDays } from '../../domain/phases';
+import { allowedWeeks, BEHAVIOR_PRESETS, getPreset, suggestedOutcomeMetrics } from '../../domain/behaviors';
+import { METRIC_LIST, METRICS, metricProvider, PROVIDER_NAMES } from '../../domain/metrics';
+import { buildPhasePlan, DEFAULT_WASHOUT_DAYS, durationExplanation, INTERVENTION_WEEK_OPTIONS, recommendBaselineDays } from '../../domain/phases';
 import { ONE_ACTIVE_EXPERIMENT_MESSAGE } from '../../domain/rules';
 import { findBaselineContamination } from '../../domain/stats';
 import type { CreateExperimentInput, ExperimentPhase, MetricId, OutcomeMetricInput } from '../../domain/types';
-import { useActiveExperiments, useExperiments, useReadings } from '../../hooks/useData';
+import { useActiveExperiments, useExperiments, useReadings, useSources } from '../../hooks/useData';
 import { colors, phaseColors, radius, spacing } from '../../theme';
 import { addDays, formatRange, formatShort, today, weekdayIndex } from '../../utils/dates';
 
-const STEPS = ['Behaviour', 'Adherence', 'Outcomes', 'Duration', 'Review'];
+const STEPS = ['Protocol', 'Adherence', 'Outcomes', 'Duration', 'Review'];
 
 interface Form {
   presetId: string;
-  title: string;
-  behaviorChange: string;
   outcomeMetrics: OutcomeMetricInput[];
   weeks: number;
   withWashout: boolean;
@@ -36,94 +36,91 @@ interface Form {
 export default function NewExperimentScreen() {
   const { repo, invalidate } = useRepository();
   const readings = useReadings();
+  const sources = useSources();
   const active = useActiveExperiments();
   const all = useExperiments();
   const t = today();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<Form>({
-    presetId: '',
-    title: '',
-    behaviorChange: '',
-    outcomeMetrics: [],
-    weeks: DEFAULT_INTERVENTION_WEEKS,
-    withWashout: false,
-    startDate: t,
-  });
+  const [form, setForm] = useState<Form>({ presetId: '', outcomeMetrics: [], weeks: 6, withWashout: false, startDate: t });
   const update = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
 
   const preset = getPreset(form.presetId);
-  const isCustom = form.presetId === CUSTOM_PRESET_ID;
+  const weekOptions = preset ? allowedWeeks(preset, INTERVENTION_WEEK_OPTIONS) : INTERVENTION_WEEK_OPTIONS;
   const metricIds = useMemo(() => form.outcomeMetrics.map((m) => m.metricId), [form.outcomeMetrics]);
+  const primary = form.outcomeMetrics.find((m) => m.isPrimary);
+
+  // Which connected source supplies each metric (null = no data would arrive).
+  const providerOf = useMemo(() => {
+    const list = sources.data ?? [];
+    return Object.fromEntries(METRIC_LIST.map((d) => [d.id, metricProvider(d.id, list)])) as Record<MetricId, ReturnType<typeof metricProvider>>;
+  }, [sources.data]);
+  const noSourceAtAll = !!sources.data && METRIC_LIST.every((d) => providerOf[d.id] === null);
+  const primaryHasSource = primary ? providerOf[primary.metricId] !== null : false;
 
   const baseline = useMemo(
     () => (readings.data ? recommendBaselineDays(readings.data, metricIds.length ? metricIds : ['hrv'], form.startDate) : null),
     [readings.data, metricIds, form.startDate],
   );
 
-  const plan = useMemo(() => {
-    if (!baseline) return [];
-    return buildPhasePlan({
-      designType: form.withWashout ? 'ABA' : 'AB',
-      startDate: form.startDate,
-      baselineDays: baseline.days,
-      interventionDays: form.weeks * 7,
-      washoutDays: DEFAULT_WASHOUT_DAYS,
-    });
-  }, [baseline, form.withWashout, form.startDate, form.weeks]);
+  // Cheap to rebuild each render; the React Compiler memoises it where useful.
+  const plan =
+    baseline && preset
+      ? buildPhasePlan({
+          designType: form.withWashout ? 'ABA' : 'AB',
+          startDate: form.startDate,
+          baselineDays: baseline.days,
+          runInDays: preset.runInDays,
+          interventionDays: form.weeks * 7,
+          washoutDays: DEFAULT_WASHOUT_DAYS,
+        })
+      : [];
 
   const previewPhases: ExperimentPhase[] = plan.map((p, i) => ({ id: `preview-${i}`, experimentId: 'preview', ...p }));
+  const intervention = plan.find((p) => p.type === 'intervention');
 
-  const contamination = useMemo(() => {
-    const base = plan[0];
-    if (!base) return [];
-    return findBaselineContamination({ from: base.startDate, to: base.endDate }, all.data ?? []);
-  }, [plan, all.data]);
+  const contamination = plan[0] ? findBaselineContamination({ from: plan[0].startDate, to: plan[0].endDate }, all.data ?? []) : [];
 
   // ---- step validity ---------------------------------------------------------
-  const canContinue =
-    step === 0 ? form.title.trim().length > 0 && form.behaviorChange.trim().length > 0 : step === 2 ? form.outcomeMetrics.length > 0 && form.outcomeMetrics.some((m) => m.isPrimary) : true;
+  const canContinue = step === 0 ? !!preset : step === 2 ? form.outcomeMetrics.length > 0 && !!primary : true;
+  const canStart = !!baseline && !!preset && primaryHasSource && !saving;
 
-  const choosePreset = (id: string) => {
-    if (id === CUSTOM_PRESET_ID) {
-      update({ presetId: id, title: form.presetId === CUSTOM_PRESET_ID ? form.title : '', behaviorChange: form.presetId === CUSTOM_PRESET_ID ? form.behaviorChange : '', outcomeMetrics: suggestedOutcomeMetrics(null), withWashout: false });
-    } else {
-      const p = getPreset(id)!;
-      update({ presetId: id, title: p.title, behaviorChange: p.description, outcomeMetrics: suggestedOutcomeMetrics(id), withWashout: p.carryOver });
-    }
+  const chooseProtocol = (id: string) => {
+    const p = getPreset(id)!;
+    update({ presetId: id, outcomeMetrics: suggestedOutcomeMetrics(id), weeks: p.defaultWeeks, withWashout: p.washout !== 'optional' });
   };
 
+  /** Secondary metrics can be toggled; the primary is fixed by the protocol; metrics without a source cannot be chosen. */
   const toggleMetric = (metricId: MetricId) => {
+    if (primary?.metricId === metricId || providerOf[metricId] === null) return;
     const exists = form.outcomeMetrics.find((m) => m.metricId === metricId);
-    let next: OutcomeMetricInput[];
     if (exists) {
-      next = form.outcomeMetrics.filter((m) => m.metricId !== metricId);
-      if (exists.isPrimary && next.length) next[0] = { ...next[0], isPrimary: true };
-    } else {
-      const def = METRICS[metricId];
-      const suggested = (preset?.suggestedMetrics ?? []).find((m) => m.metricId === metricId);
-      next = [
-        ...form.outcomeMetrics,
-        { metricId, isPrimary: form.outcomeMetrics.length === 0, expectedDirection: suggested?.direction ?? (def.higherIsBetter === null ? 'any' : def.higherIsBetter ? 'increase' : 'decrease') },
-      ];
+      update({ outcomeMetrics: form.outcomeMetrics.filter((m) => m.metricId !== metricId) });
+      return;
     }
-    update({ outcomeMetrics: next });
+    const def = METRICS[metricId];
+    const suggested = (preset?.suggestedMetrics ?? []).find((m) => m.metricId === metricId);
+    update({
+      outcomeMetrics: [
+        ...form.outcomeMetrics,
+        { metricId, isPrimary: false, expectedDirection: suggested?.direction ?? (def.higherIsBetter === null ? 'any' : def.higherIsBetter ? 'increase' : 'decrease') },
+      ],
+    });
   };
-
-  const makePrimary = (metricId: MetricId) => update({ outcomeMetrics: form.outcomeMetrics.map((m) => ({ ...m, isPrimary: m.metricId === metricId })) });
 
   const start = async () => {
-    if (!baseline) return;
+    if (!baseline || !preset) return;
     setSaving(true);
     try {
       const input: CreateExperimentInput = {
-        title: form.title.trim(),
-        behaviorChange: form.behaviorChange.trim(),
-        behaviorPresetId: isCustom ? null : form.presetId,
+        title: preset.title,
+        behaviorChange: preset.description,
+        behaviorPresetId: preset.id,
         adherenceType: 'daily_boolean',
         designType: form.withWashout ? 'ABA' : 'AB',
         startDate: form.startDate,
         baselineDays: baseline.days,
+        runInDays: preset.runInDays,
         interventionDays: form.weeks * 7,
         washoutDays: DEFAULT_WASHOUT_DAYS,
         outcomeMetrics: form.outcomeMetrics,
@@ -169,7 +166,7 @@ export default function NewExperimentScreen() {
           {step < STEPS.length - 1 ? (
             <Button label="Continue" onPress={() => setStep((s) => s + 1)} disabled={!canContinue} style={{ flex: 2 }} />
           ) : (
-            <Button label="Start experiment" icon="play" onPress={start} loading={saving} disabled={!baseline} style={{ flex: 2 }} />
+            <Button label="Start experiment" icon="play" onPress={start} loading={saving} disabled={!canStart} style={{ flex: 2 }} />
           )}
         </Row>
       }
@@ -178,33 +175,19 @@ export default function NewExperimentScreen() {
 
       {step === 0 && (
         <>
-          <AppText variant="heading">What do you want to test?</AppText>
+          <AppText variant="heading">Choose an experiment</AppText>
           <AppText variant="caption" color="textSecondary" style={{ marginTop: -spacing.sm }}>
-            One behaviour change at a time. The app tracks whether you did it each day and what your body did in response.
+            Each protocol comes with the boundaries that make the result trustworthy. You decide how long to run it, which extra metrics to watch, and when to start.
           </AppText>
-          {BEHAVIOR_PRESETS.map((p) => (
-            <OptionCard key={p.id} title={p.title} text={p.description} selected={form.presetId === p.id} onPress={() => choosePreset(p.id)} badge={p.carryOver ? 'Washout advised' : undefined} />
-          ))}
-          <OptionCard title="Something else" text="Describe your own behaviour change." selected={isCustom} onPress={() => choosePreset(CUSTOM_PRESET_ID)} />
-          {isCustom && (
-            <Card>
-              <AppText variant="label" color="textMuted">
-                Short name
-              </AppText>
-              <TextInput value={form.title} onChangeText={(v) => update({ title: v })} placeholder="e.g. Cold shower" placeholderTextColor={colors.textMuted} style={styles.input} />
-              <AppText variant="label" color="textMuted" style={{ marginTop: spacing.md }}>
-                What exactly will you do each day?
-              </AppText>
-              <TextInput
-                value={form.behaviorChange}
-                onChangeText={(v) => update({ behaviorChange: v })}
-                placeholder="Be specific enough that a yes/no answer each day is obvious."
-                placeholderTextColor={colors.textMuted}
-                multiline
-                style={[styles.input, { minHeight: 72 }]}
-              />
-            </Card>
+          {noSourceAtAll && (
+            <InfoBox tone="warning">No wearable is connected, so no metric would receive data. Connect Oura on the Home screen first; you can still look through the protocols.</InfoBox>
           )}
+          {BEHAVIOR_PRESETS.map((p) => (
+            <OptionCard key={p.id} title={p.title} text={p.description} rules={p.rules} selected={form.presetId === p.id} onPress={() => chooseProtocol(p.id)} />
+          ))}
+          <AppText variant="caption" color="textMuted" align="center">
+            More protocols are added over time. A behaviour without clear daily yes/no rules cannot be tested honestly, so there is no free-form option.
+          </AppText>
         </>
       )}
 
@@ -219,19 +202,28 @@ export default function NewExperimentScreen() {
         </>
       )}
 
-      {step === 2 && (
+      {step === 2 && preset && (
         <>
           <AppText variant="heading">Which metrics should respond?</AppText>
           <AppText variant="caption" color="textSecondary" style={{ marginTop: -spacing.sm }}>
-            {preset?.rationale ?? 'Pick the metrics you expect to move. Fewer is better: every extra metric adds a chance of a false positive.'}
+            {preset.rationale} The primary outcome is set by the protocol; add or remove secondary metrics as you like. Fewer is better: every extra metric adds a chance of a false positive.
           </AppText>
           <Card padding={0}>
             {METRIC_LIST.map((def, i) => {
               const sel = form.outcomeMetrics.find((m) => m.metricId === def.id);
+              const provider = providerOf[def.id];
+              const locked = sel?.isPrimary === true;
+              const unavailable = provider === null;
               return (
-                <View key={def.id} style={[styles.metricRow, i > 0 && styles.metricRowBorder]}>
-                  <Pressable onPress={() => toggleMetric(def.id)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md }} accessibilityRole="checkbox" accessibilityState={{ checked: !!sel }}>
-                    <Ionicons name={sel ? 'checkbox' : 'square-outline'} size={22} color={sel ? colors.primary : colors.textMuted} />
+                <View key={def.id} style={[styles.metricRow, i > 0 && styles.metricRowBorder, unavailable && { opacity: 0.55 }]}>
+                  <Pressable
+                    onPress={() => toggleMetric(def.id)}
+                    disabled={locked || unavailable}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: !!sel, disabled: locked || unavailable }}
+                  >
+                    <Ionicons name={sel ? (locked ? 'lock-closed' : 'checkbox') : 'square-outline'} size={22} color={sel ? colors.primary : colors.textMuted} />
                     <View style={{ flex: 1 }}>
                       <AppText variant="bodyStrong">{def.name}</AppText>
                       <AppText variant="caption" color="textSecondary">
@@ -239,33 +231,45 @@ export default function NewExperimentScreen() {
                       </AppText>
                     </View>
                   </Pressable>
-                  {sel && (
-                    <Pressable onPress={() => makePrimary(def.id)} hitSlop={8} accessibilityRole="button" accessibilityLabel={sel.isPrimary ? 'Primary outcome' : 'Make primary'}>
-                      {sel.isPrimary ? <Badge label="Primary" tone="primary" /> : <Ionicons name="star-outline" size={20} color={colors.textMuted} />}
-                    </Pressable>
-                  )}
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    {locked && <Badge label="Primary" tone="primary" />}
+                    <Badge label={provider ? PROVIDER_NAMES[provider] : 'No source'} tone={provider ? 'success' : 'neutral'} dot={!!provider} />
+                  </View>
                 </View>
               );
             })}
           </Card>
-          <InfoBox>The primary outcome is the one the final verdict is based on. The others are reported too, but with a grain of salt.</InfoBox>
+          <InfoBox>
+            {`Each metric comes from exactly one data source, shown on the right. ${primary && !primaryHasSource ? `The primary outcome (${METRICS[primary.metricId].name}) has no source yet, so the experiment cannot start until a wearable is connected.` : 'The primary outcome is the one the final verdict is based on; the others are reported too, with a grain of salt.'}`}
+          </InfoBox>
         </>
       )}
 
-      {step === 3 && baseline && (
+      {step === 3 && baseline && preset && (
         <>
           <AppText variant="heading">How long will you run it?</AppText>
+          {preset.runInDays > 0 && (
+            <Card tone="muted">
+              <Row>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: phaseColors.run_in.fill }} />
+                <AppText variant="bodyStrong">{`${preset.runInDays}-day run-in first`}</AppText>
+              </Row>
+              <AppText variant="caption" color="textSecondary" style={{ marginTop: spacing.xs }}>
+                {preset.runInNote}
+              </AppText>
+            </Card>
+          )}
           <Card>
             <AppText variant="label" color="textMuted">
               Intervention length
             </AppText>
             <View style={{ marginTop: spacing.sm }}>
-              <SegmentedControl options={INTERVENTION_WEEK_OPTIONS.map((w) => ({ label: `${w} wk`, value: w }))} value={form.weeks} onChange={(weeks) => update({ weeks })} />
+              <SegmentedControl options={weekOptions.map((w) => ({ label: `${w} wk`, value: w }))} value={form.weeks} onChange={(weeks) => update({ weeks })} />
             </View>
             <AppText variant="caption" color="textSecondary" style={{ marginTop: spacing.md }}>
-              {durationExplanation(form.weeks)}
+              {`${durationExplanation(form.weeks)} This protocol needs at least ${preset.minWeeks} weeks${preset.runInDays > 0 ? ', counted after the run-in' : ''}.`}
             </AppText>
-            <UncertaintyBars weeks={form.weeks} />
+            <UncertaintyBars weeks={form.weeks} options={weekOptions} />
           </Card>
 
           <Card>
@@ -276,11 +280,17 @@ export default function NewExperimentScreen() {
                   Stop the behaviour for 2 weeks afterwards and keep measuring. If the effect fades, season and coincidence are ruled out.
                 </AppText>
               </View>
-              <Switch value={form.withWashout} onValueChange={(withWashout) => update({ withWashout })} trackColor={{ true: colors.primary, false: colors.border }} thumbColor={colors.surface} />
+              <Switch
+                value={form.withWashout}
+                disabled={preset.washout === 'required'}
+                onValueChange={(withWashout) => update({ withWashout })}
+                trackColor={{ true: colors.primary, false: colors.border }}
+                thumbColor={colors.surface}
+              />
             </Row>
-            {preset?.carryOver && (
+            {preset.washout !== 'optional' && (
               <View style={{ marginTop: spacing.sm }}>
-                <Badge label="Recommended for this behaviour" tone="warning" />
+                <Badge label={preset.washout === 'required' ? 'Required by this protocol' : 'Recommended for this behaviour'} tone="warning" />
               </View>
             )}
           </Card>
@@ -311,13 +321,13 @@ export default function NewExperimentScreen() {
         </>
       )}
 
-      {step === 4 && baseline && (
+      {step === 4 && baseline && preset && (
         <>
           <AppText variant="heading">Review</AppText>
           <Card>
-            <AppText variant="title">{form.title}</AppText>
+            <AppText variant="title">{preset.title}</AppText>
             <AppText variant="body" color="textSecondary" style={{ marginTop: 2 }}>
-              {form.behaviorChange}
+              {preset.description}
             </AppText>
             <View style={{ marginTop: spacing.lg }}>
               <PhaseTimeline phases={previewPhases} />
@@ -329,6 +339,7 @@ export default function NewExperimentScreen() {
                     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: phaseColors[p.type].fill }} />
                     <AppText variant="caption" style={{ fontWeight: '600' }}>
                       {phaseColors[p.type].label}
+                      {p.type === 'run_in' ? ' (not counted)' : ''}
                     </AppText>
                   </Row>
                   <AppText variant="caption" color="textSecondary">
@@ -344,17 +355,21 @@ export default function NewExperimentScreen() {
               Outcome metrics
             </AppText>
             <View style={{ marginTop: spacing.sm, gap: 6 }}>
-              {form.outcomeMetrics.map((m) => (
-                <Row key={m.metricId} style={{ justifyContent: 'space-between' }}>
-                  <AppText variant="body">{METRICS[m.metricId].name}</AppText>
-                  <Row gap={6}>
-                    <AppText variant="caption" color="textSecondary">
-                      {m.expectedDirection === 'any' ? 'any change' : m.expectedDirection}
-                    </AppText>
-                    {m.isPrimary && <Badge label="Primary" tone="primary" />}
+              {form.outcomeMetrics.map((m) => {
+                const provider = providerOf[m.metricId];
+                return (
+                  <Row key={m.metricId} style={{ justifyContent: 'space-between' }}>
+                    <AppText variant="body">{METRICS[m.metricId].name}</AppText>
+                    <Row gap={6}>
+                      <AppText variant="caption" color="textSecondary">
+                        {m.expectedDirection === 'any' ? 'any change' : m.expectedDirection}
+                        {provider ? ` · ${PROVIDER_NAMES[provider]}` : ' · no source'}
+                      </AppText>
+                      {m.isPrimary && <Badge label="Primary" tone="primary" />}
+                    </Row>
                   </Row>
-                </Row>
-              ))}
+                );
+              })}
             </View>
             <AppText variant="label" color="textMuted" style={{ marginTop: spacing.lg }}>
               Adherence
@@ -363,6 +378,8 @@ export default function NewExperimentScreen() {
               Daily yes / no with optional note
             </AppText>
           </Card>
+
+          {!primaryHasSource && <InfoBox tone="warning">The primary outcome has no connected data source. Connect a wearable on the Home screen, then come back to start.</InfoBox>}
 
           {contamination.length > 0 ? (
             contamination.map((c) => (
@@ -380,7 +397,7 @@ export default function NewExperimentScreen() {
           )}
 
           <AppText variant="caption" color="textMuted" align="center">
-            Starting creates the baseline phase from your existing data and begins daily check-ins on {formatShort(form.startDate)}.
+            {`Starting creates the baseline phase from your existing data and begins daily check-ins on ${formatShort(form.startDate)}.${intervention && intervention.startDate !== form.startDate ? ` Counted intervention days begin ${formatShort(intervention.startDate)}.` : ''}`}
           </AppText>
         </>
       )}
@@ -400,7 +417,7 @@ function StepDots({ count, current }: { count: number; current: number }) {
   );
 }
 
-function OptionCard({ title, text, selected, onPress, badge, disabled }: { title: string; text: string; selected: boolean; onPress: () => void; badge?: string; disabled?: boolean }) {
+function OptionCard({ title, text, rules, selected, onPress, badge, disabled }: { title: string; text: string; rules?: string[]; selected: boolean; onPress: () => void; badge?: string; disabled?: boolean }) {
   return (
     <Pressable onPress={onPress} disabled={disabled} accessibilityRole="radio" accessibilityState={{ selected, disabled }} style={({ pressed }) => [styles.option, selected && styles.optionSelected, disabled && { opacity: 0.5 }, pressed && { opacity: 0.85 }]}>
       <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={22} color={selected ? colors.primary : colors.textMuted} />
@@ -412,20 +429,32 @@ function OptionCard({ title, text, selected, onPress, badge, disabled }: { title
         <AppText variant="caption" color="textSecondary">
           {text}
         </AppText>
+        {rules && rules.length > 0 && (
+          <View style={{ marginTop: 6, gap: 2 }}>
+            {rules.map((r) => (
+              <Row key={r} gap={6} style={{ alignItems: 'flex-start' }}>
+                <Ionicons name="checkmark" size={14} color={selected ? colors.primary : colors.textMuted} style={{ marginTop: 2 }} />
+                <AppText variant="caption" color={selected ? 'text' : 'textMuted'} style={{ flex: 1 }}>
+                  {r}
+                </AppText>
+              </Row>
+            ))}
+          </View>
+        )}
       </View>
     </Pressable>
   );
 }
 
 /** Visualises how the uncertainty band shrinks with more weeks (∝ 1/√n). */
-function UncertaintyBars({ weeks }: { weeks: number }) {
-  const ref = 1 / Math.sqrt(2 * 7);
+function UncertaintyBars({ weeks, options }: { weeks: number; options: number[] }) {
+  const ref = 1 / Math.sqrt(options[0] * 7);
   return (
     <View style={{ marginTop: spacing.md, gap: 6 }}>
       <AppText variant="label" color="textMuted">
         Width of the uncertainty band
       </AppText>
-      {INTERVENTION_WEEK_OPTIONS.map((w) => {
+      {options.map((w) => {
         const rel = 1 / Math.sqrt(w * 7) / ref;
         const active = w === weeks;
         return (
@@ -443,7 +472,7 @@ function UncertaintyBars({ weeks }: { weeks: number }) {
         );
       })}
       <AppText variant="caption" color="textMuted">
-        Relative to a 2-week trial. Doubling the length shrinks the band by about 30%, which is why 6 weeks is the default.
+        {`Relative to the shortest allowed trial (${options[0]} weeks). Doubling the length shrinks the band by about 30%.`}
       </AppText>
     </View>
   );
@@ -452,7 +481,6 @@ function UncertaintyBars({ weeks }: { weeks: number }) {
 const styles = StyleSheet.create({
   option: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start', padding: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.border },
   optionSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  input: { marginTop: 6, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.text, backgroundColor: colors.background, textAlignVertical: 'top' },
   metricRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
   metricRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
 });

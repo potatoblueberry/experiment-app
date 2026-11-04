@@ -4,7 +4,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { METRICS } from '../../domain/metrics';
-import { interventionPhase, phaseFor, phaseLengthDays } from '../../domain/phases';
+import { firstActivePhase, interventionPhase, phaseFor, phaseLengthDays } from '../../domain/phases';
 import type { AdherenceLog, ExperimentDetail } from '../../domain/types';
 import { diffDays, today } from '../../utils/dates';
 import { colors, phaseColors } from '../../theme';
@@ -18,12 +18,12 @@ interface Props {
 /** Where the experiment is today, in words and as a 0–1 progress. */
 export function experimentProgress(e: ExperimentDetail) {
   const t = today();
-  const intv = interventionPhase(e.phases);
+  const first = firstActivePhase(e.phases);
   const current = phaseFor(e.phases, t);
-  if (!intv) return { label: '', progress: 0, phase: current };
-  if (t < intv.startDate) return { label: `Starts in ${diffDays(t, intv.startDate)} d`, progress: 0, phase: current };
-  const total = diffDays(intv.startDate, e.endDate) + 1;
-  const day = Math.min(total, diffDays(intv.startDate, t) + 1);
+  if (!first) return { label: '', progress: 0, phase: current };
+  if (t < first.startDate) return { label: `Starts in ${diffDays(t, first.startDate)} d`, progress: 0, phase: current };
+  const total = diffDays(first.startDate, e.endDate) + 1;
+  const day = Math.min(total, diffDays(first.startDate, t) + 1);
   if (e.status !== 'active' || t > e.endDate) return { label: 'Finished', progress: 1, phase: current };
   const phaseLabel = current && current.type !== 'intervention' ? ` · ${phaseColors[current.type].label}` : '';
   return { label: `Day ${day} of ${total}${phaseLabel}`, progress: day / total, phase: current };

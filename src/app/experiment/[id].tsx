@@ -13,7 +13,7 @@ import { adherenceRate, CheckInCard, EffectSummary, experimentProgress } from '.
 import { AppText, Badge, Button, Card, InfoBox, Legend, Row, Screen, SectionHeader, Stat } from '../../components/ui';
 import { useRepository } from '../../data/RepositoryProvider';
 import { METRICS } from '../../domain/metrics';
-import { baselinePhase, interventionPhase } from '../../domain/phases';
+import { baselinePhase, firstActivePhase, interventionPhase, phaseLengthDays } from '../../domain/phases';
 import { estimateEffect, findConfounds, mean, toPoints } from '../../domain/stats';
 import type { ExperimentStatus, ISODate } from '../../domain/types';
 import { useActiveExperiments, useAdherenceLogs, useExperimentDetail, useReadings } from '../../hooks/useData';
@@ -48,6 +48,8 @@ export default function ExperimentDetailScreen() {
   const intv = interventionPhase(e.phases)!;
   const base = baselinePhase(e.phases)!;
   const washout = e.phases.find((p) => p.type === 'washout');
+  const runIn = e.phases.find((p) => p.type === 'run_in');
+  const first = firstActivePhase(e.phases) ?? intv;
   const progress = experimentProgress(e);
   const adh = adherenceRate(logs.data);
   const isActive = e.status === 'active';
@@ -79,7 +81,7 @@ export default function ExperimentDetailScreen() {
         </Row>
         <PhaseTimeline phases={e.phases} />
         <AppText variant="caption" color="textMuted" style={{ marginTop: spacing.md }}>
-          Baseline is taken from data you already had before {formatShort(e.startDate)}. {washout ? 'The washout phase checks whether the effect disappears when you stop.' : ''}
+          Baseline is taken from data you already had before {formatShort(e.startDate)}.{runIn ? ` The first ${phaseLengthDays(runIn)} days are a run-in: logged, but not counted as intervention.` : ''}{washout ? ' The washout phase checks whether the effect disappears when you stop.' : ''}
         </AppText>
       </Card>
 
@@ -90,7 +92,7 @@ export default function ExperimentDetailScreen() {
           <Stat label="Done" value={adh.logged ? `${Math.round(adh.rate * 100)}%` : '–'} sub={`${adh.done} of ${adh.logged} logged days`} />
           <Stat label="Journal" value={String(notes.length)} sub="notes" />
         </Row>
-        <AdherenceCalendar from={intv.startDate} to={intv.endDate} secondaryRange={washout ? { from: washout.startDate, to: washout.endDate } : undefined} logs={logMap} selected={selectedDay ?? undefined} onSelectDay={(d) => setSelectedDay((cur) => (cur === d ? null : d))} />
+        <AdherenceCalendar from={first.startDate} to={intv.endDate} secondaryRange={washout ? { from: washout.startDate, to: washout.endDate } : undefined} logs={logMap} selected={selectedDay ?? undefined} onSelectDay={(d) => setSelectedDay((cur) => (cur === d ? null : d))} />
         <AppText variant="caption" color="textMuted" style={{ marginTop: spacing.sm }}>
           Tap a day to log or edit it.{washout ? ' Amber days belong to the washout phase: the answer should be "No".' : ''}
         </AppText>
@@ -110,7 +112,7 @@ export default function ExperimentDetailScreen() {
       <SectionHeader title={finished ? 'Results' : 'Outcomes so far'} />
       {finished && (
         <InfoBox tone="info">
-          Final numbers compare intervention days against what your baseline trend and weekday pattern predicted. Illness and travel days are excluded.
+          Final numbers compare intervention days against what your baseline trend and weekday pattern predicted. Illness and travel days{runIn ? ' and the run-in period' : ''} are excluded.
         </InfoBox>
       )}
       {e.outcomeMetrics

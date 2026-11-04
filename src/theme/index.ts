@@ -31,6 +31,7 @@ export const colors = {
 
 export const phaseColors: Record<PhaseType, { fill: string; soft: string; label: string }> = {
   baseline: { fill: '#94A3B8', soft: '#E9EDF2', label: 'Baseline' },
+  run_in: { fill: '#8B5CF6', soft: '#EDE9FE', label: 'Run-in' },
   intervention: { fill: colors.primary, soft: colors.primarySoft, label: 'Intervention' },
   washout: { fill: colors.accent, soft: colors.accentSoft, label: 'Washout' },
 };

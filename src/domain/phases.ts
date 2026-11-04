@@ -27,25 +27,35 @@ export interface PhasePlan {
 
 export interface BuildPhasesInput {
   designType: DesignType;
-  startDate: ISODate; // first intervention day
+  startDate: ISODate; // first day of the behaviour (run-in if any, else intervention)
   baselineDays: number;
+  runInDays?: number;
   interventionDays: number;
   washoutDays?: number;
 }
 
-/** Lays the phases back to back around the intervention start date. */
+/** Lays the phases back to back: baseline | run-in (optional) | intervention | washout (ABA). */
 export function buildPhasePlan(input: BuildPhasesInput): PhasePlan[] {
   const { startDate, baselineDays, interventionDays } = input;
-  const plan: PhasePlan[] = [
-    { type: 'baseline', order: 0, startDate: addDays(startDate, -baselineDays), endDate: addDays(startDate, -1) },
-    { type: 'intervention', order: 1, startDate, endDate: addDays(startDate, interventionDays - 1) },
-  ];
+  const runInDays = input.runInDays ?? 0;
+  const plan: PhasePlan[] = [{ type: 'baseline', order: 0, startDate: addDays(startDate, -baselineDays), endDate: addDays(startDate, -1) }];
+  let cursor = startDate;
+  if (runInDays > 0) {
+    plan.push({ type: 'run_in', order: plan.length, startDate: cursor, endDate: addDays(cursor, runInDays - 1) });
+    cursor = addDays(cursor, runInDays);
+  }
+  plan.push({ type: 'intervention', order: plan.length, startDate: cursor, endDate: addDays(cursor, interventionDays - 1) });
+  cursor = addDays(cursor, interventionDays);
   if (input.designType === 'ABA') {
     const washoutDays = input.washoutDays ?? DEFAULT_WASHOUT_DAYS;
-    const wStart = addDays(startDate, interventionDays);
-    plan.push({ type: 'washout', order: 2, startDate: wStart, endDate: addDays(wStart, washoutDays - 1) });
+    plan.push({ type: 'washout', order: plan.length, startDate: cursor, endDate: addDays(cursor, washoutDays - 1) });
   }
   return plan;
+}
+
+/** First phase in which the user actually does the behaviour (run-in if present, else intervention). */
+export function firstActivePhase(phases: ExperimentPhase[]): ExperimentPhase | undefined {
+  return phases.filter((p) => p.type !== 'baseline').sort((a, b) => a.order - b.order)[0];
 }
 
 export function phaseLengthDays(p: { startDate: ISODate; endDate: ISODate }): number {
