@@ -1,161 +1,166 @@
 # Good experiment practice in N1 Lab
 
 _What makes a self-experiment trustworthy, and what that means for the app. Written
-2026-11-04. This is the reference for every protocol and analysis decision; CLAUDE.md
-points here._
+2026-11-04, revised the same day around the principle **automatic first, input optional**.
+CLAUDE.md points here; read this before changing a protocol, a wizard gate or the
+statistics._
+
+## 0. The governing constraint
+
+Users will not fill in a diary every day. Assume the worst case for every design
+decision: **a first-time user, no surveys answered, nothing but their Oura history and the
+one adherence signal.** Everything that improves rigor must work in that case. Surveys and
+diaries are optional extras that can *raise* confidence, never requirements the analysis
+depends on.
 
 ## 1. The honest starting point
 
 A person's life is not a laboratory. Work stress, season, illness, travel, alcohol,
-training load, a new mattress: all of it moves sleep and HRV, and none of it holds still
-for six weeks. So the question is never "can we isolate caffeine perfectly?" The answer to
-that is no. The useful question is:
+training load: all of it moves sleep and HRV, and none of it holds still for weeks. We
+cannot isolate caffeine perfectly, and neither can a clinic. The useful question is:
 
 > How do we design and analyse the experiment so that **it is unlikely that something other
 > than the behaviour explains the result**, and so that **when something else probably
 > does, the app says so instead of claiming an effect?**
 
-Three levers exist, and the app needs all three:
+Three levers, all of them available without user input:
 
-1. **Design** so that confounders cannot line up with the phases (randomisation,
-   reversal, repetition).
-2. **Measure** the confounders we cannot control, then exclude or adjust for them, and
-   check whether they were balanced between phases.
-3. **Report** with calibrated confidence, and treat one experiment as evidence, not proof.
-   Replication is the real answer to "was it the caffeine?"
+1. **Design** so that confounders cannot line up with the condition (reversal, crossover,
+   run-in after every switch).
+2. **Measure** confounders from the ring itself, exclude or adjust for them, and check that
+   they were balanced between conditions.
+3. **Report** with calibrated confidence from the person's own noise, and treat one
+   experiment as evidence, not proof. Replication is the real answer.
 
-## 2. How a researcher would test caffeine → sleep in one person
+## 2. How a researcher tests caffeine → sleep in one person
 
-The gold standard for one person is the **randomised, blinded, multiple-crossover N-of-1
-trial**, the design used in clinical N-of-1 medicine:
+The clinical gold standard is the **randomised, blinded, multiple-crossover N-of-1 trial**:
+caffeine or placebo capsules, switched several times in random order, a discarded run-in
+after every switch, a pre-registered primary outcome, covariates recorded, analysis that
+respects autocorrelation, and a repeat of the whole trial later. Blinding is impossible with
+coffee, which is why N1 Lab uses **objective ring outcomes only**, never "how did you
+sleep?". Every other element translates, and most of it needs no input.
 
-- **Blinding**: identical capsules, caffeine or placebo, prepared by someone else. Removes
-  expectation effects. We cannot do this in an app with coffee, so expectation stays as a
-  known weakness; it is why N1 Lab uses **objective outcomes only** (ring data), never "how
-  did you sleep?".
-- **Multiple crossovers**: not one block of "off", but several alternations, for example
-  on/off/on/off in blocks of 1–2 weeks, with the order randomised. This is the single most
-  powerful defence against slow-moving confounders such as a stressful month: if caffeine
-  status flips several times while stress drifts slowly, the two cannot stay correlated.
-- **Run-in and washout at every switch**: caffeine withdrawal lasts about a week and
-  tolerance rebuilds in days, so the first days after each switch are discarded. This is
-  why block lengths must exceed the carry-over time.
-- **Pre-registration**: primary outcome, expected direction, duration, and the analysis are
-  fixed before the first day. No peeking, no changing the outcome once the data is in.
-- **Covariate diary**: alcohol, late exercise, illness, travel, unusual stress, late meals,
-  sleep aids: recorded daily so they can be excluded or adjusted for, and so the two
-  conditions can be compared on them afterwards.
-- **Analysis** that respects the data: a within-person model with period effects,
-  weekday effects and autocorrelation, and a **minimal important difference** decided in
-  advance (e.g. "+15 minutes of sleep or +3 ms HRV is worth knowing about"). Effects below
-  it are reported as "too small to matter even if real".
-- **Replication**: the same person repeats the trial months later. Two agreeing trials
-  in different seasons are far stronger than one long one.
+## 3. Lever 1: design (zero input)
 
-Everything below is the app's translation of that list.
+- **Crossover is the default** for behaviours with short carry-over, caffeine included:
+  on / off / on / off in blocks of about two weeks, block order randomised by the app, the
+  first 5–7 days after every switch marked run-in and excluded. A slow confounder such as a
+  stressful month cannot stay aligned with a condition that flips every two weeks. Total
+  length ≈ 8 weeks, no longer than one abstinence block today.
+- **Reversal (ABA) is the minimum** for reversible behaviours. The washout phase is not
+  decoration: the metric is expected to return towards baseline, and that return is
+  reported as evidence.
+- **Run-in after every switch**, not only at the start. Withdrawal and adaptation are
+  excluded each time.
+- **Block length must exceed carry-over time.** Caffeine: ≥ 10 days per block. Sauna:
+  ≥ 10 days. Morning light: 1 week is enough.
+- **One experiment at a time** and **one data source per metric** (both enforced) are the
+  same principle: nothing else is allowed to change.
 
-## 3. The stress problem, concretely
+## 4. Lever 2: measure confounders automatically
 
-"They had a stressful month at work while testing caffeine." Four defences, in order of
-strength:
+The ring sees more of the confounders than we have used so far. Pull them, store them as
+readings or flags, and use them in three ways: exclude extreme days, adjust in the model,
+and check balance between conditions.
 
-1. **Reversal and crossover designs.** With ABA, the washout shows whether sleep returns to
-   baseline when caffeine returns. With ABAB blocks, stress would have to flip in time with
-   the blocks to fake an effect. The app should prefer ABA by default and offer ABAB for
-   behaviours with short carry-over.
-2. **Measure stress.** A one-tap daily stress rating (1–5) in the check-in costs five
-   seconds. With it we can (a) **check balance**: was mean stress during the intervention
-   different from baseline? If yes, say so prominently; (b) **adjust**: include stress as a
-   covariate in the trend model; (c) **flag** very high-stress days like illness days.
-3. **Exclude extreme days** rather than pretend they are normal: illness, travel, alcohol,
-   a night shift, a sick child. Flags already exist in the data model.
-4. **Downgrade the verdict** when the comparison is unbalanced. "Likely effect, but stress
-   was higher during the intervention; this may explain part or all of it" is the correct
-   output, not a green badge.
-
-## 4. A clean baseline
-
-The baseline phase (4–8 weeks before the start) must represent the person's **normal life
-right now**. It is clean when:
-
-| Check | Rule | What to do if it fails |
+| Confounder | Automatic signal (Oura API v2) | Use |
 |---|---|---|
-| Coverage | ≥ 85–90 % of nights recorded for the primary metric | Shorten the window to the covered part, or ask for 2 more weeks of wearing the ring |
-| Flagged days | ≤ 3 illness/travel days in 8 weeks, ≤ 2 in 4 weeks | Shorten the window to exclude them, or wait |
-| No overlap | Not inside an earlier experiment's intervention or washout | Already enforced (`findBaselineContamination`) |
-| Stability | No strong trend (e.g. HRV drifting > 1 SD over the window) and no variance explosion compared with the person's long-term model | Wait until stable, or warn that the trend model will carry more uncertainty |
-| No life change | No change in medication, job, schedule, training block, diet, or another habit started in that window | Ask the user; if yes, shorten to after the change or wait |
-| Season sanity | Ideally the whole experiment sits inside one season | Prefer ABA; warn if the plan crosses a season boundary |
+| Illness | temperature deviation spike, raised resting HR, raised respiratory rate, HRV drop together (daily_readiness, sleep) | Auto-flag `illness`; exclude those nights |
+| Travel / jet lag | time zone offset in sleep record timestamps changes; bedtime shift > 2 h | Auto-flag `travel`; exclude |
+| Daytime stress | `daily_stress` endpoint (stress_high, recovery_high minutes) — **requires the `stress` scope, not yet requested** | Covariate: adjust and balance-check |
+| Training load | daily_activity (active calories, high-activity minutes), workouts | Covariate |
+| Sleep regularity | bedtime_start variance from sleep records | Covariate; also a baseline-cleanliness signal |
+| Alcohol, late meals, sickness | Oura app tags (`tag` scope, already requested) when the user tags there | Flags, free when present |
+| Late nights, social jet lag | bedtime_start vs personal norm | Covariate / flag |
+| Menstrual cycle | Oura cycle insights where tracked | Later |
+| Season | the calendar | Already modelled as local trend; crossover makes it harmless |
 
-The last two cannot be read from the data. They need a **short pre-start checklist** in
-the wizard ("In the last 6 weeks, did any of these happen?") whose answers set flags or
-shorten the window. A **prospective baseline** (keep wearing the ring for two more weeks
-before starting, changing nothing) is the fallback whenever the retrospective window is not
-clean. Waiting is a feature, not a failure.
+The first-experiment user gives none of this and still gets most of the table.
 
-## 5. Keeping everything else constant during the experiment
+## 5. Lever 3: analysis calibrated on the person's own data
 
-The user cannot freeze life, but they can commit to not **adding** changes:
+1. **Pre-registered primary outcome** with direction; secondaries exploratory.
+2. **Trend + weekday adjustment** (current), extended with the automatic covariates above.
+3. **Placebo start dates.** Re-run the whole analysis pretending the experiment started on
+   many other days inside the baseline, and report how often a fake start produces an
+   effect as large as the real one. This is an empirical p-value that inherits the person's
+   own autocorrelation and noise without modelling either. The most honest single number
+   we can show.
+4. **Reversal check** for ABA and every "off" block in a crossover.
+5. **Mechanistic signature.** Caffeine should lengthen sleep latency, raise early-night heart
+   rate, increase awake time and cut efficiency *together*; all are in Oura's sleep
+   records. The expected pattern moving together is stronger evidence than one metric
+   alone, and one metric moving alone against the pattern is a warning. Each protocol
+   declares its signature.
+6. **Balance check**: baseline vs intervention on every automatic covariate and flag
+   count. Any imbalance is printed next to the verdict and lowers the tier.
+7. **Minimal important difference** per metric, fixed in advance, and the **minimal
+   detectable effect** for the chosen length shown on the duration step.
+8. **Autocorrelation-aware uncertainty** (block bootstrap) so bands are not too narrow.
+9. **Verdict tiers**, always with the reason:
+   - **Strong**: crossover with reversal in each off block, clean baseline, covariates
+     balanced, placebo-date probability small.
+   - **Moderate**: ABA with reversal, or AB with clean baseline and balanced covariates.
+   - **Weak**: any imbalance, dirty baseline, missing reversal, adherence < 70 %.
+10. **Replication prompt** after any non-weak result: repeat in another season. Two
+    agreeing trials are the standard; one is a hint.
 
-- **Hold-constant pledge at start**: no new supplements, habits, diets or training blocks
-  for the duration; keep the usual bedtime window; keep wearing the ring every night.
-- **Weekly "did anything change?" prompt**: one question, with free text. Answers become
-  flags or, for big changes (new medication, moved house), a recommendation to stop and
-  restart later.
-- **One experiment at a time** (already enforced) is the same principle.
-- **Same device, same settings**: a metric comes from exactly one source for the whole
-  experiment (already enforced); switching rings mid-trial invalidates it.
+## 6. A baseline that proves its own cleanliness
 
-## 6. Analysis rules
+We cannot know about a new job. We can test whether the 4–8 week window is **typical of
+this person**, entirely from data:
 
-1. **Pre-registered primary outcome** with a direction; secondaries are exploratory and
-   reported with a visible "grain of salt".
-2. **Model**: baseline trend + weekday pattern projected into the intervention, step effect
-   estimated as the mean gap (current). Next steps: add measured covariates (stress,
-   alcohol), account for **autocorrelation** (night-to-night readings are not independent,
-   so the effective sample size is smaller than the day count; uncertainty bands must widen
-   accordingly), and use robust statistics against outlier nights.
-3. **Minimal important difference per metric**, decided in advance and shown on the
-   duration step together with the **minimal detectable effect** for the chosen length.
-   If the length cannot detect a meaningful effect, say so before the start.
-4. **Per-protocol and as-planned** estimates side by side (current). A large gap means
-   adherence, not the behaviour, is the story.
-5. **Balance check**: for every flag and covariate, compare baseline vs intervention
-   (counts and means). Any imbalance appears in the report next to the verdict.
-6. **Reversal check** for ABA: did the metric move back during washout? Report it as its own
-   line; an effect that does not reverse is suspicious for a reversible behaviour.
-7. **Verdict tiers** rather than one badge:
-   - **Strong**: crossover or ABA with reversal, clean baseline, covariates balanced.
-   - **Moderate**: AB or ABA without clear reversal, baseline clean, covariates balanced.
-   - **Weak**: any imbalance, dirty baseline, or adherence < 70 %.
-   The tier is printed with the reason.
-8. **Replication prompt**: after a "strong" or "moderate" result, suggest repeating the
-   experiment in a different season. Two trials are the standard of evidence; one is a hint.
+| Check | Signal | If it fails |
+|---|---|---|
+| Coverage | ≥ 85–90 % nights for the primary metric | Shorten window; else prospective baseline |
+| Flagged nights | ≤ 3 auto-flagged (illness/travel) in 8 weeks, ≤ 2 in 4 | Shorten to exclude; else wait |
+| No overlap | Not inside an earlier experiment's active phases (enforced) | Shift start |
+| Representativeness | Window mean within ~0.5 SD of the long-term model, variance not inflated, no strong trend | Prospective baseline |
+| No hidden life change | No change-point in the preceding months in resting HR level, bedtime regularity, activity level, sleep duration | Start the window after the change-point, or wait |
+| Season | Whole plan inside one season, or crossover design | Prefer crossover; warn |
 
-## 7. What this means for the app, in priority order
+**Prospective baseline** is the universal fallback: keep wearing the ring for two more
+weeks, change nothing, then start. Waiting is a feature. An optional pre-start checklist
+(medication, job, moving, another habit) can tighten this further for users willing to
+answer, but the gate must work without it.
+
+## 7. Adherence: the one input that stays, made as light as possible
+
+- **Exception reporting**: assume the protocol was followed; one button for "I broke it
+  today"; one weekly confirmation ("all good this week?"). Silence means yes.
+- Weeks without a confirmation count as adhered but lower the tier one notch, which is
+  stated in the report.
+- Per-protocol vs as-planned estimates remain side by side.
+- Optional, never required: a note, a stress rating, tags. Any such answer is stored as a
+  flag or covariate and improves the balance check.
+
+## 8. What this means for the app, in priority order
 
 | # | Feature | Why | Status |
 |---|---|---|---|
-| 1 | **Daily context in the check-in**: stress 1–5, alcohol yes/no, illness, travel, unusual day (free text) | Turns the biggest confounders into data we can exclude, adjust and balance-check | Planned |
-| 2 | **Baseline cleanliness gate** in the wizard: coverage, flags, stability, pre-start checklist; offer a prospective 2-week baseline when it fails | Garbage baseline, garbage result | Partly (coverage/flags/overlap); checklist and stability missing |
-| 3 | **Balance check and verdict tiers** in the report | Says "stress was higher" instead of a misleading green badge | Planned |
-| 4 | **Reversal check line** for ABA | Makes washout earn its keep | Planned |
-| 5 | **Crossover design option (ABAB)** with run-in after every switch, for short carry-over behaviours | Strongest defence against slow confounders | Planned; needs block randomisation UI and phase builder support |
-| 6 | **Hold-constant pledge + weekly change prompt** | Prevents the user from adding confounders | Planned |
-| 7 | **Minimal detectable effect** on the duration step, per metric, from the personal SD | Stops under-powered experiments before they start | Planned |
-| 8 | **Autocorrelation-aware uncertainty** and robust estimates | Current bands are too narrow for autocorrelated nights | Planned |
-| 9 | **Blinded preliminary results** option (hide the verdict until the end) | Reduces expectation and behaviour drift | Later |
-| 10 | **Replication prompt** and combining two trials | The real test | Later |
-| 11 | **Automatic flags** from the ring: illness from temperature deviation, travel from time zone | Less diary burden | Later (Oura session roadmap item) |
+| 1 | **Oura: add the `stress` scope; import daily_stress, sleep latency, awake time, average sleep HR, bedtime_start, respiratory rate, time zone offset** | Raw material for every automatic confounder and signature check | Planned (Oura app settings + sync mapping) |
+| 2 | **Automatic flags**: illness (temperature + HR + respiratory rate + HRV), travel (time zone offset / bedtime shift) | Exclusion without a diary | Planned |
+| 3 | **Crossover design** with randomised blocks and run-in after every switch; make it the caffeine default | Strongest zero-input defence against slow confounders | Planned (phase builder + wizard + estimator per block) |
+| 4 | **Balance check + verdict tiers** in the report | "Stress was higher during the intervention" instead of a green badge | Planned |
+| 5 | **Placebo start-date test** | Calibrated probability from the person's own noise | Planned (pure function in stats.ts) |
+| 6 | **Baseline representativeness + change-point gate**, prospective-baseline fallback | Clean baseline without questions | Partly (coverage/flags/overlap exist) |
+| 7 | **Reversal check line** and **mechanistic signature per protocol** | Makes washout and secondaries earn their keep | Planned |
+| 8 | **Exception-only adherence** with weekly confirmation | Realistic input burden | Planned (replaces daily yes/no as the default UI) |
+| 9 | **Minimal detectable effect** on the duration step | Stops under-powered experiments before they start | Planned |
+| 10 | **Autocorrelation-aware uncertainty** (block bootstrap) | Current bands are too narrow | Planned |
+| 11 | Optional pre-start checklist, optional stress rating / notes | Raise confidence for users who want to | Later, always optional |
+| 12 | Blinded preliminary results; replication prompt and combining two trials | Expectation control; the real test | Later |
 
-Already in place: objective outcomes only, one experiment at a time, run-in phases,
-retrospective baseline limited to 4–8 weeks, overlap check against earlier experiments,
-trend + weekday adjustment, per-protocol vs as-planned, washout designs, flagged-day
-exclusion.
+Already in place: objective outcomes only, one experiment at a time, one source per
+metric, run-in phases, 4–8 week retrospective baseline, overlap check against earlier
+experiments, trend + weekday adjustment, per-protocol vs as-planned, washout designs,
+flagged-day exclusion.
 
-## 8. Writing for the user
+## 9. Writing for the user
 
-Every result screen should pass this test: a sceptical friend reads it and cannot say "but
+Every result screen must pass this test: a sceptical friend reads it and cannot say "but
 that could just be X" without the screen having already mentioned X. Use "consistent with",
 "likely", "cannot be distinguished from", never "proves". Show the number of nights, the
-uncertainty band, the balance check and the tier together, always.
+uncertainty band, the balance check and the tier together, always. When the honest answer
+is "we cannot tell", say that in those words.
