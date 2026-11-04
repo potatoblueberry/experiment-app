@@ -11,15 +11,22 @@ import { useRepository } from '../../data/RepositoryProvider';
 import type { DataSourceConnection } from '../../domain/types';
 import { startOuraConnect, syncOura } from '../../lib/oura';
 import { spacing } from '../../theme';
+import { formatShort } from '../../utils/dates';
 import { SourceCard } from '../experiments';
 import { AppText, Button, Card, InfoBox, Row } from '../ui';
 
 interface Job {
   key: string;
-  full: boolean;
   status: 'running' | 'done' | 'failed';
   message?: string;
+  /** Readings imported so far across the calls of this job. */
+  imported: number;
+  /** How many calls this job has made; each call imports as much as fits its time budget. */
+  calls: number;
 }
+
+/** Safety stop: 40 calls × up to ~15 months each is far more history than any ring has. */
+const MAX_CALLS = 40;
 
 function reasonText(reason?: string): string {
   switch (reason) {
@@ -46,20 +53,30 @@ export function OuraPanel({ sources, readingDays }: { sources: DataSourceConnect
   const [seenParam, setSeenParam] = useState<string | null>(null);
   if (paramKey !== seenParam) {
     setSeenParam(paramKey);
-    if (paramKey && params.oura === 'connected') setJob({ key: paramKey, full: true, status: 'running' });
-    else if (paramKey && params.oura === 'error') setJob({ key: paramKey, full: false, status: 'failed', message: reasonText(params.reason) });
+    if (paramKey && params.oura === 'connected') setJob({ key: paramKey, status: 'running', imported: 0, calls: 0 });
+    else if (paramKey && params.oura === 'error') setJob({ key: paramKey, status: 'failed', message: reasonText(params.reason), imported: 0, calls: 0 });
   }
 
+  // One sync call per (job, call number). While the server reports more history, the
+  // job increments `calls`, which re-runs this effect for the next call.
   const started = useRef<string | null>(null);
   useEffect(() => {
-    if (!job || job.status !== 'running' || started.current === job.key) return;
-    started.current = job.key;
+    if (!job || job.status !== 'running') return;
+    const callKey = `${job.key}#${job.calls}`;
+    if (started.current === callKey) return;
+    started.current = callKey;
     let cancelled = false;
     if (paramKey) router.replace('/');
-    syncOura({ full: job.full })
+    syncOura()
       .then((r) => {
         if (cancelled) return;
-        setJob({ ...job, status: 'done', message: `Imported ${r.readings} readings from ${r.from} to ${r.to}.` });
+        const imported = job.imported + r.readings;
+        const range = r.syncedFrom && r.syncedThrough ? `${formatShort(r.syncedFrom)} – ${formatShort(r.syncedThrough)}` : '';
+        if (!r.backfillDone && job.calls + 1 < MAX_CALLS) {
+          setJob({ ...job, calls: job.calls + 1, imported, message: `${imported} readings so far, back to ${r.syncedFrom ? formatShort(r.syncedFrom) : '…'}. Looking for older data…` });
+        } else {
+          setJob({ ...job, status: 'done', imported, message: `Imported ${imported} readings. History covers ${range}.` });
+        }
         invalidate();
       })
       .catch((e: unknown) => {
@@ -110,13 +127,15 @@ export function OuraPanel({ sources, readingDays }: { sources: DataSourceConnect
       {connected && (
         <Row style={{ justifyContent: 'space-between' }}>
           <AppText variant="caption" color="textSecondary" style={{ flex: 1 }}>
-            {oura?.syncedThrough ? `Synced through ${oura.syncedThrough}.` : 'Not synced yet.'}
+            {oura?.syncedThrough
+              ? `History ${oura.syncedFrom ? formatShort(oura.syncedFrom) : '?'} – ${formatShort(oura.syncedThrough)}${oura.backfillDone ? '' : ' (older data still importing)'}`
+              : 'Not synced yet.'}
           </AppText>
-          <Button label={running ? 'Syncing…' : 'Sync now'} variant="secondary" size="sm" icon="sync-outline" loading={running} onPress={() => setJob({ key: `manual-${Date.now()}`, full: !oura?.syncedThrough, status: 'running' })} />
+          <Button label={running ? 'Syncing…' : 'Sync now'} variant="secondary" size="sm" icon="sync-outline" loading={running} onPress={() => setJob({ key: `manual-${Date.now()}`, status: 'running', imported: 0, calls: 0 })} />
         </Row>
       )}
 
-      {job?.status === 'running' && <InfoBox>{job.full ? 'Importing your Oura history. The first import can take a minute.' : 'Fetching the latest days from Oura…'}</InfoBox>}
+      {job?.status === 'running' && <InfoBox>{job.message ?? 'Fetching your Oura data. A long history is imported in rounds and can take a few minutes.'}</InfoBox>}
       {job?.status === 'done' && <InfoBox tone="success">{job.message}</InfoBox>}
       {job?.status === 'failed' && <InfoBox tone="warning">{job.message}</InfoBox>}
       {oura?.lastError && job?.status !== 'failed' && <InfoBox tone="warning">{`Last sync problem: ${oura.lastError}`}</InfoBox>}

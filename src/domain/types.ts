@@ -118,6 +118,10 @@ export interface DataSourceConnection {
   lastSyncAt: ISODateTime | null;
   /** Last day the provider sync covered; the next incremental sync starts a week before it. */
   syncedThrough?: ISODate | null;
+  /** Oldest day the history import has reached so far. */
+  syncedFrom?: ISODate | null;
+  /** True once the backward import found no more history. */
+  backfillDone?: boolean;
   lastError?: string | null;
 }
 

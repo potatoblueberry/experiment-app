@@ -31,6 +31,8 @@ export interface DataSourceConnectionRow {
   status: DataSourceConnection['status'];
   last_sync_at: string | null;
   synced_through?: string | null;
+  synced_from?: string | null;
+  backfill_done?: boolean;
   last_error?: string | null;
   created_at?: string;
 }
@@ -97,7 +99,7 @@ export interface ExperimentRowWithChildren extends ExperimentRow {
 // ---------------------------------------------------------------------------
 
 export function rowToSource(r: DataSourceConnectionRow): DataSourceConnection {
-  return { id: r.id, userId: r.user_id, provider: r.provider, status: r.status, lastSyncAt: r.last_sync_at, syncedThrough: r.synced_through ?? null, lastError: r.last_error ?? null };
+  return { id: r.id, userId: r.user_id, provider: r.provider, status: r.status, lastSyncAt: r.last_sync_at, syncedThrough: r.synced_through ?? null, syncedFrom: r.synced_from ?? null, backfillDone: r.backfill_done ?? false, lastError: r.last_error ?? null };
 }
 
 export function rowToReading(r: MetricReadingRow): MetricReading {

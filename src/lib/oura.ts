@@ -10,9 +10,13 @@ import { supabase } from './supabase';
 
 export interface SyncResult {
   ok: true;
-  from: string;
-  to: string;
+  /** Readings written by this call (forward window plus the backward chunks that fit the time budget). */
   readings: number;
+  chunks: number;
+  syncedFrom: string | null;
+  syncedThrough: string | null;
+  /** False means older history remains: call again to continue. */
+  backfillDone: boolean;
 }
 
 function client() {
@@ -49,6 +53,6 @@ export async function startOuraConnect(): Promise<void> {
   else await Linking.openURL(url);
 }
 
-export function syncOura(opts: { full?: boolean } = {}): Promise<SyncResult> {
-  return invoke<SyncResult>('oura-sync', { full: !!opts.full });
+export function syncOura(): Promise<SyncResult> {
+  return invoke<SyncResult>('oura-sync', {});
 }

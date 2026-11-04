@@ -188,10 +188,13 @@ only translation point. Every row carries `user_id` (or reaches it through
    Built 2026-11-04: migration 0003 (`oura_tokens`, `oauth_states`, sync columns), the three
    Edge Functions, OuraPanel in the app. Flow: Connect Oura → oura-connect → Oura login →
    oura-callback stores tokens and redirects to the app with `?oura=connected` → the app
-   runs a full sync (2 years back, 120-day chunks, next_token paging; Oura returns nothing
-   before the account existed) → later "Sync now" is incremental (restarts 7 days before
-   `synced_through`). Still to do: a scheduled nightly sync (pg_cron or a cron-triggered
-   function), `heartrate` time series, Oura tags → `flags`.
+   runs the sync. Each sync call does a forward window (7 days before `synced_through` →
+   today) and then imports older 120-day chunks backwards within a 45 s budget, saving
+   `synced_from` / `empty_streak` / `backfill_done` after every chunk (migration 0004,
+   planning in `_shared/backfill.ts`). The app keeps calling while `backfillDone` is false,
+   so any length of history imports in rounds; it stops after ~1 year of empty chunks or at
+   15 years. Still to do: a scheduled nightly sync (pg_cron or a cron-triggered function),
+   `heartrate` time series, Oura tags → `flags`.
 3. **Real sync + flags**: detect illness (temperature deviation spike) and travel
    automatically and set `MetricReading.flags`; let the user mark/unmark days.
 4. **Push reminders**: `expo-notifications`, one evening reminder per day while any
