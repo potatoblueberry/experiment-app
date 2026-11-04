@@ -161,6 +161,6 @@ export function generateReadings({ endDate, days = 365, seed = 20241104, effectW
  */
 export const PRESET_FAKE_EFFECTS: Record<string, Partial<Record<MetricId, number>>> = {
   morning_sunlight: { readiness: 4, sleep_duration: 0.2, sleep_efficiency: 1.5 },
-  no_caffeine_after_12: { sleep_efficiency: 3, sleep_duration: 0.3, resting_hr: -1.5, hrv: 2 },
+  no_caffeine: { sleep_efficiency: 3, sleep_duration: 0.3, resting_hr: -1.5, hrv: 2 },
   daily_sauna: { hrv: 4, resting_hr: -2, sleep_duration: 0.1 },
 };

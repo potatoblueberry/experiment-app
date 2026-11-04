@@ -6,6 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { METRIC_LIST } from '../domain/metrics';
+import { ActiveExperimentExistsError } from '../domain/rules';
 import type {
   AdherenceLog,
   CreateExperimentInput,
@@ -26,7 +27,7 @@ import type { Repository } from './repository';
 import { buildDemoSeed, effectWindowsFor, materializeExperiment, stripDetail, uuid } from './seed/demoSeed';
 import { DEMO_USER_ID, generateReadings } from './seed/generateReadings';
 
-const SEED_VERSION = 4;
+const SEED_VERSION = 5; // bumped 2026-11-04: preset rename + one-active-experiment rule
 const KEY = 'n1lab:v1';
 const KEYS = {
   meta: `${KEY}:meta`,
@@ -183,6 +184,7 @@ export class LocalMockRepository implements Repository {
 
   async createExperiment(input: CreateExperimentInput): Promise<ExperimentDetail> {
     const state = await this.ensure();
+    if (state.experiments.some((e) => e.status === 'active')) throw new ActiveExperimentExistsError();
     const detail = materializeExperiment(input, 'active', DEMO_USER_ID);
     state.experiments.push(stripDetail(detail));
     state.phases.push(...detail.phases);

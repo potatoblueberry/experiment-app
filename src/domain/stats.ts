@@ -247,3 +247,36 @@ export function findConfounds(
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Baseline contamination: with one experiment at a time, the remaining risk is
+// that the new comparison window reaches back into an earlier experiment's
+// intervention or washout, so "baseline" would already contain an effect.
+// ---------------------------------------------------------------------------
+
+export interface BaselineContamination {
+  otherExperimentId: string;
+  otherTitle: string;
+  phaseType: 'intervention' | 'washout';
+  overlapDays: number;
+  /** Last day of the overlapping phase: starting after it keeps the baseline clean. */
+  phaseEndDate: ISODate;
+}
+
+export function findBaselineContamination(
+  baseline: { from: ISODate; to: ISODate },
+  others: { id: string; title: string; phases: { type: string; startDate: ISODate; endDate: ISODate }[] }[],
+): BaselineContamination[] {
+  const out: BaselineContamination[] = [];
+  for (const o of others) {
+    for (const p of o.phases) {
+      if (p.type !== 'intervention' && p.type !== 'washout') continue;
+      const from = baseline.from > p.startDate ? baseline.from : p.startDate;
+      const to = baseline.to < p.endDate ? baseline.to : p.endDate;
+      const overlap = diffDays(from, to) + 1;
+      if (overlap <= 0) continue;
+      out.push({ otherExperimentId: o.id, otherTitle: o.title, phaseType: p.type, overlapDays: overlap, phaseEndDate: p.endDate });
+    }
+  }
+  return out;
+}

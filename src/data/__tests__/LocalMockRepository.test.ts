@@ -21,8 +21,26 @@ describe('LocalMockRepository', () => {
     expect(active.outcomeMetrics.some((m) => m.isPrimary)).toBe(true);
   });
 
+  it('refuses a second active experiment', async () => {
+    const repo = new LocalMockRepository();
+    const input = {
+      title: 'Cold shower',
+      behaviorChange: '2 minutes cold at the end of every shower.',
+      behaviorPresetId: null,
+      adherenceType: 'daily_boolean' as const,
+      designType: 'AB' as const,
+      startDate: today(),
+      baselineDays: 28,
+      interventionDays: 14,
+      outcomeMetrics: suggestedOutcomeMetrics(null),
+    };
+    await expect(repo.createExperiment(input)).rejects.toThrow(/already have an experiment running/);
+  });
+
   it('persists across instances', async () => {
     const first = new LocalMockRepository();
+    const running = (await first.listExperiments({ status: ['active'] }))[0];
+    await first.updateExperimentStatus(running.id, 'abandoned');
     const created = await first.createExperiment({
       title: 'Cold shower',
       behaviorChange: '2 minutes cold at the end of every shower.',

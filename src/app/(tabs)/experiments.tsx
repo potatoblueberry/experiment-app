@@ -4,6 +4,7 @@ import React from 'react';
 import { Pressable } from 'react-native';
 
 import { ExperimentCard } from '../../components/experiments';
+import { ONE_ACTIVE_EXPERIMENT_MESSAGE } from '../../domain/rules';
 import { AppText, Button, Card, EmptyState, Screen, SectionHeader } from '../../components/ui';
 import { useAllAdherenceLogs, useExperiments } from '../../hooks/useData';
 import { colors } from '../../theme';
@@ -18,9 +19,11 @@ export default function ExperimentsScreen() {
     <Screen
       title="Experiments"
       right={
-        <Pressable onPress={() => router.push('/experiment/new')} hitSlop={8} accessibilityRole="button" accessibilityLabel="New experiment">
-          <Ionicons name="add-circle" size={32} color={colors.primary} />
-        </Pressable>
+        active.length === 0 ? (
+          <Pressable onPress={() => router.push('/experiment/new')} hitSlop={8} accessibilityRole="button" accessibilityLabel="New experiment">
+            <Ionicons name="add-circle" size={32} color={colors.primary} />
+          </Pressable>
+        ) : undefined
       }
     >
       {experiments.data && experiments.data.length === 0 && (
@@ -31,7 +34,7 @@ export default function ExperimentsScreen() {
 
       {active.length > 0 && (
         <>
-          <SectionHeader title="Active" />
+          <SectionHeader title="Running now" />
           {active.map((e) => (
             <ExperimentCard key={e.id} experiment={e} logs={logs.data?.filter((l) => l.experimentId === e.id)} />
           ))}
@@ -47,13 +50,13 @@ export default function ExperimentsScreen() {
         </>
       )}
 
-      {experiments.data && experiments.data.length > 0 && (
-        <>
-          <Button label="New experiment" icon="add" onPress={() => router.push('/experiment/new')} variant="secondary" />
-          <AppText variant="caption" color="textMuted" align="center">
-            Running several at once is fine. The app warns when two experiments overlap on the same outcome metric.
-          </AppText>
-        </>
+      {experiments.data && experiments.data.length > 0 && active.length === 0 && (
+        <Button label="New experiment" icon="add" onPress={() => router.push('/experiment/new')} variant="secondary" />
+      )}
+      {active.length > 0 && (
+        <AppText variant="caption" color="textMuted" align="center">
+          {ONE_ACTIVE_EXPERIMENT_MESSAGE}
+        </AppText>
       )}
     </Screen>
   );

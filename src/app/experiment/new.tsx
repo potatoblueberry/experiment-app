@@ -8,14 +8,16 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { PhaseTimeline } from '../../components/charts';
+import { ExperimentCard } from '../../components/experiments';
 import { AppText, Badge, Button, Card, Chip, InfoBox, Row, Screen, SegmentedControl } from '../../components/ui';
 import { useRepository } from '../../data/RepositoryProvider';
 import { BEHAVIOR_PRESETS, CUSTOM_PRESET_ID, getPreset, suggestedOutcomeMetrics } from '../../domain/behaviors';
 import { METRIC_LIST, METRICS } from '../../domain/metrics';
 import { buildPhasePlan, DEFAULT_INTERVENTION_WEEKS, DEFAULT_WASHOUT_DAYS, durationExplanation, INTERVENTION_WEEK_OPTIONS, recommendBaselineDays } from '../../domain/phases';
-import { findConfounds } from '../../domain/stats';
+import { ONE_ACTIVE_EXPERIMENT_MESSAGE } from '../../domain/rules';
+import { findBaselineContamination } from '../../domain/stats';
 import type { CreateExperimentInput, ExperimentPhase, MetricId, OutcomeMetricInput } from '../../domain/types';
-import { useActiveExperiments, useReadings } from '../../hooks/useData';
+import { useActiveExperiments, useExperiments, useReadings } from '../../hooks/useData';
 import { colors, phaseColors, radius, spacing } from '../../theme';
 import { addDays, formatRange, formatShort, today, weekdayIndex } from '../../utils/dates';
 
@@ -35,6 +37,7 @@ export default function NewExperimentScreen() {
   const { repo, invalidate } = useRepository();
   const readings = useReadings();
   const active = useActiveExperiments();
+  const all = useExperiments();
   const t = today();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -70,16 +73,12 @@ export default function NewExperimentScreen() {
   }, [baseline, form.withWashout, form.startDate, form.weeks]);
 
   const previewPhases: ExperimentPhase[] = plan.map((p, i) => ({ id: `preview-${i}`, experimentId: 'preview', ...p }));
-  const endDate = plan.length ? plan[plan.length - 1].endDate : form.startDate;
 
-  const confounds = useMemo(
-    () =>
-      findConfounds(
-        { id: 'new', startDate: form.startDate, endDate, metricIds },
-        (active.data ?? []).map((e) => ({ id: e.id, title: e.title, startDate: e.startDate, endDate: e.endDate, metricIds: e.outcomeMetrics.map((m) => m.metricId) })),
-      ),
-    [active.data, form.startDate, endDate, metricIds],
-  );
+  const contamination = useMemo(() => {
+    const base = plan[0];
+    if (!base) return [];
+    return findBaselineContamination({ from: base.startDate, to: base.endDate }, all.data ?? []);
+  }, [plan, all.data]);
 
   // ---- step validity ---------------------------------------------------------
   const canContinue =
@@ -145,6 +144,20 @@ export default function NewExperimentScreen() {
   ];
 
   // ---- render ----------------------------------------------------------------
+  const running = active.data?.[0];
+  if (running) {
+    return (
+      <Screen back title="New experiment">
+        <InfoBox tone="warning">{ONE_ACTIVE_EXPERIMENT_MESSAGE}</InfoBox>
+        <ExperimentCard experiment={running} />
+        <Button label="Open the running experiment" icon="arrow-forward" onPress={() => router.replace({ pathname: '/experiment/[id]', params: { id: running.id } })} />
+        <AppText variant="caption" color="textMuted" align="center">
+          Why only one? If two behaviours change in the same weeks, no analysis can say which one moved your numbers.
+        </AppText>
+      </Screen>
+    );
+  }
+
   return (
     <Screen
       back
@@ -351,19 +364,19 @@ export default function NewExperimentScreen() {
             </AppText>
           </Card>
 
-          {confounds.length > 0 ? (
-            confounds.map((c) => (
-              <InfoBox key={c.otherExperimentId} tone="warning">
+          {contamination.length > 0 ? (
+            contamination.map((c) => (
+              <InfoBox key={`${c.otherExperimentId}-${c.phaseType}`} tone="warning">
                 <AppText variant="caption">
                   <AppText variant="caption" style={{ fontWeight: '700' }}>
-                    Possible confound:
+                    Baseline not clean:
                   </AppText>{' '}
-                  {`overlaps ${c.overlapDays} days with “${c.otherTitle}”, which also tracks ${c.sharedMetrics.map((m) => METRICS[m].shortName).join(', ')}. If both change at once, the data cannot tell which behaviour caused it.`}
+                  {`${c.overlapDays} of the comparison days fall inside the ${c.phaseType} of “${c.otherTitle}” (ended ${formatShort(c.phaseEndDate)}). Those days may already carry an effect. Starting later, or shortening the comparison window, gives a cleaner baseline.`}
                 </AppText>
               </InfoBox>
             ))
           ) : (
-            <InfoBox tone="success">No overlap with other active experiments on these metrics.</InfoBox>
+            <InfoBox tone="success">The comparison window does not overlap any earlier experiment.</InfoBox>
           )}
 
           <AppText variant="caption" color="textMuted" align="center">

@@ -1,5 +1,5 @@
 import type { ExperimentPhase, MetricReading } from '../types';
-import { buildBaselineModel, estimateEffect, findConfounds, mean, quantile, rollingMean, sd } from '../stats';
+import { buildBaselineModel, estimateEffect, findBaselineContamination, findConfounds, mean, quantile, rollingMean, sd } from '../stats';
 import { addDays, weekdayIndex } from '../../utils/dates';
 import { mulberry32 } from '../../data/seed/generateReadings';
 
@@ -144,5 +144,31 @@ describe('findConfounds', () => {
     expect(out[0].otherTitle).toBe('Sunlight');
     expect(out[0].sharedMetrics).toEqual(['hrv']);
     expect(out[0].overlapDays).toBe(30);
+  });
+});
+
+describe('findBaselineContamination', () => {
+  const sauna = {
+    id: 's',
+    title: 'Daily sauna',
+    phases: [
+      { type: 'baseline', startDate: '2026-05-06', endDate: '2026-06-16' },
+      { type: 'intervention', startDate: '2026-06-17', endDate: '2026-07-28' },
+      { type: 'washout', startDate: '2026-07-29', endDate: '2026-08-11' },
+    ],
+  };
+
+  it('flags a comparison window that reaches into an earlier intervention or washout', () => {
+    const out = findBaselineContamination({ from: '2026-07-20', to: '2026-08-30' }, [sauna]);
+    expect(out.map((c) => [c.phaseType, c.overlapDays])).toEqual([
+      ['intervention', 9],
+      ['washout', 14],
+    ]);
+    expect(out[1].phaseEndDate).toBe('2026-08-11');
+  });
+
+  it('ignores earlier baselines and non-overlapping windows', () => {
+    expect(findBaselineContamination({ from: '2026-05-10', to: '2026-06-10' }, [sauna])).toEqual([]);
+    expect(findBaselineContamination({ from: '2026-08-12', to: '2026-10-01' }, [sauna])).toEqual([]);
   });
 });

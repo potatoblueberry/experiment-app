@@ -28,9 +28,9 @@ export const BEHAVIOR_PRESETS: BehaviorPreset[] = [
     rationale: 'Morning light anchors the circadian clock, which mostly shows up in sleep quality and recovery.',
   },
   {
-    id: 'no_caffeine_after_12',
-    title: 'No caffeine after 12',
-    description: 'Last coffee, tea or energy drink before noon.',
+    id: 'no_caffeine',
+    title: 'No caffeine',
+    description: 'No coffee, tea, energy drinks or other caffeine at any time of day.',
     suggestedMetrics: [
       { metricId: 'sleep_efficiency', direction: 'increase' },
       { metricId: 'sleep_duration', direction: 'increase' },
@@ -38,7 +38,7 @@ export const BEHAVIOR_PRESETS: BehaviorPreset[] = [
       { metricId: 'hrv', direction: 'increase' },
     ],
     carryOver: true,
-    rationale: 'Caffeine has a long half-life, so afternoon intake fragments sleep and keeps the night-time heart rate up.',
+    rationale: 'Caffeine has a long half-life, so even morning intake fragments sleep and keeps the night-time heart rate up.',
   },
   {
     id: 'daily_sauna',

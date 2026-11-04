@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '../../auth/AuthProvider';
 import { CheckInCard, ExperimentCard, SourceCard } from '../../components/experiments';
+import { OuraPanel } from '../../components/sources/OuraPanel';
 import { AppText, Button, Card, EmptyState, InfoBox, Row, Screen, SectionHeader } from '../../components/ui';
 import { useRepository } from '../../data/RepositoryProvider';
 import { formatMetricDelta, formatMetricValue, METRICS } from '../../domain/metrics';
@@ -91,16 +92,18 @@ export default function HomeScreen() {
 
       {/* Active experiments */}
       <SectionHeader
-        title="Active experiments"
+        title="Your experiment"
         action={
-          <Pressable onPress={() => router.push('/experiment/new')} hitSlop={8} accessibilityRole="button">
-            <Row gap={4}>
-              <Ionicons name="add-circle" size={18} color={colors.primary} />
-              <AppText variant="caption" color="primaryText" style={{ fontWeight: '600' }}>
-                New
-              </AppText>
-            </Row>
-          </Pressable>
+          experiments.data && experiments.data.length === 0 ? (
+            <Pressable onPress={() => router.push('/experiment/new')} hitSlop={8} accessibilityRole="button">
+              <Row gap={4}>
+                <Ionicons name="add-circle" size={18} color={colors.primary} />
+                <AppText variant="caption" color="primaryText" style={{ fontWeight: '600' }}>
+                  New
+                </AppText>
+              </Row>
+            </Pressable>
+          ) : undefined
         }
       />
       {experiments.data && experiments.data.length === 0 ? (
@@ -159,18 +162,13 @@ export default function HomeScreen() {
 
       {/* Sources */}
       <SectionHeader title="Data sources" />
-      {sources.data?.map((s) => (
-        <SourceCard key={s.id} source={s} readingDays={readingDays} />
-      ))}
-      {sources.data && sources.data.length === 0 && (
-        <Card tone="muted">
-          <AppText variant="body" color="textSecondary">
-            No wearable connected yet. Connecting an Oura ring is the next step; until then you can load the demo data set below.
-          </AppText>
-        </Card>
+      {cloud ? (
+        <OuraPanel sources={sources.data} readingDays={readingDays} />
+      ) : (
+        sources.data?.map((s) => <SourceCard key={s.id} source={s} readingDays={readingDays} />)
       )}
       {cloud ? (
-        <InfoBox>Your data is stored in your own account and only you can read it. Oura sync is not connected yet.</InfoBox>
+        <InfoBox>Your data is stored in your own account and only you can read it. Oura tokens never leave the server.</InfoBox>
       ) : (
         <InfoBox>Demo mode: generated data that imitates a year of Oura readings, stored only on this device.</InfoBox>
       )}
