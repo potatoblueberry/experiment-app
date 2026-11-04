@@ -61,9 +61,11 @@ export interface GenerateOptions {
   days?: number;
   seed?: number;
   effectWindows?: EffectWindow[];
+  /** Owner written onto every reading; defaults to the demo user. */
+  userId?: string;
 }
 
-export function generateReadings({ endDate, days = 365, seed = 20241104, effectWindows = [] }: GenerateOptions): MetricReading[] {
+export function generateReadings({ endDate, days = 365, seed = 20241104, effectWindows = [], userId = DEMO_USER_ID }: GenerateOptions): MetricReading[] {
   const rng = mulberry32(seed);
   const out: MetricReading[] = [];
   const syncedAt = nowISO();
@@ -138,7 +140,7 @@ export function generateReadings({ endDate, days = 365, seed = 20241104, effectW
     const temp = clamp(0.04 * seasonal - 0.05 * recovery + gaussian(rng) * 0.18 + ill * 0.75 + eff('temp_deviation'), -1.5, 2.5);
 
     const push = (metricId: MetricId, value: number) =>
-      out.push({ id: makeId(), userId: DEMO_USER_ID, metricId, date, value, source: 'oura', flags: [...flags], syncedAt });
+      out.push({ id: makeId(), userId, metricId, date, value, source: 'oura', flags: [...flags], syncedAt });
 
     push('sleep_duration', Math.round(sleep * 100) / 100);
     push('sleep_efficiency', Math.round(efficiency));

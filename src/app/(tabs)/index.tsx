@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { useAuth } from '../../auth/AuthProvider';
 import { CheckInCard, ExperimentCard, SourceCard } from '../../components/experiments';
 import { AppText, Button, Card, EmptyState, InfoBox, Row, Screen, SectionHeader } from '../../components/ui';
 import { useRepository } from '../../data/RepositoryProvider';
@@ -26,12 +27,16 @@ function greeting() {
 export default function HomeScreen() {
   const t = today();
   const { repo, invalidate } = useRepository();
+  const auth = useAuth();
+  const cloud = auth.status === 'signed_in';
   const sources = useSources();
   const readings = useReadings();
   const experiments = useActiveExperiments();
   const logs = useAllAdherenceLogs();
   const logIndex = useAdherenceIndex(logs.data);
   const [resetting, setResetting] = useState(false);
+  const [confirmLoad, setConfirmLoad] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   const readingDays = useMemo(() => new Set((readings.data ?? []).map((r) => r.date)).size, [readings.data]);
   const dueToday = useMemo(() => experimentsNeedingCheckIn(experiments.data, t), [experiments.data, t]);
@@ -44,9 +49,16 @@ export default function HomeScreen() {
 
   const reset = async () => {
     setResetting(true);
-    await repo.resetToSeed();
-    invalidate();
-    setResetting(false);
+    setResetError(null);
+    setConfirmLoad(false);
+    try {
+      await repo.resetToSeed();
+      invalidate();
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setResetting(false);
+    }
   };
 
   return (
@@ -110,43 +122,100 @@ export default function HomeScreen() {
           </Pressable>
         }
       />
-      <Card padding={0}>
-        <View style={styles.snapshotRow}>
-          {snapshot.map(({ id, model }, i) => {
-            const def = METRICS[id];
-            const good = def.higherIsBetter === null ? null : def.higherIsBetter ? model.recentDelta >= 0 : model.recentDelta <= 0;
-            return (
-              <Pressable key={id} onPress={() => router.push({ pathname: '/trends', params: { metric: id } })} style={[styles.snapshotCell, i > 0 && styles.snapshotBorder]}>
-                <AppText variant="label" color="textMuted">
-                  {def.shortName}
-                </AppText>
-                <AppText variant="stat" style={{ fontSize: 20, lineHeight: 24 }}>
-                  {Number.isFinite(model.mean) ? formatMetricValue(id, model.mean + model.recentDelta, false) : '–'}
-                </AppText>
-                <AppText variant="caption" color={good === null ? 'textSecondary' : good ? 'success' : 'accent'} style={{ fontSize: 12 }}>
-                  {formatMetricDelta(id, model.recentDelta)} vs. year
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </View>
-        <View style={styles.snapshotFoot}>
-          <AppText variant="caption" color="textSecondary">
-            7-day average compared with your {readingDays}-day personal baseline.
+      {readings.data && readingDays === 0 ? (
+        <Card tone="muted">
+          <AppText variant="body" color="textSecondary">
+            No readings yet. Your personal baseline appears here once a wearable has synced or demo data is loaded.
           </AppText>
-        </View>
-      </Card>
+        </Card>
+      ) : (
+        <Card padding={0}>
+          <View style={styles.snapshotRow}>
+            {snapshot.map(({ id, model }, i) => {
+              const def = METRICS[id];
+              const good = def.higherIsBetter === null ? null : def.higherIsBetter ? model.recentDelta >= 0 : model.recentDelta <= 0;
+              return (
+                <Pressable key={id} onPress={() => router.push({ pathname: '/trends', params: { metric: id } })} style={[styles.snapshotCell, i > 0 && styles.snapshotBorder]}>
+                  <AppText variant="label" color="textMuted">
+                    {def.shortName}
+                  </AppText>
+                  <AppText variant="stat" style={{ fontSize: 20, lineHeight: 24 }}>
+                    {Number.isFinite(model.mean) ? formatMetricValue(id, model.mean + model.recentDelta, false) : '–'}
+                  </AppText>
+                  <AppText variant="caption" color={good === null ? 'textSecondary' : good ? 'success' : 'accent'} style={{ fontSize: 12 }}>
+                    {formatMetricDelta(id, model.recentDelta)} vs. year
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.snapshotFoot}>
+            <AppText variant="caption" color="textSecondary">
+              7-day average compared with your {readingDays}-day personal baseline.
+            </AppText>
+          </View>
+        </Card>
+      )}
 
       {/* Sources */}
       <SectionHeader title="Data sources" />
       {sources.data?.map((s) => (
         <SourceCard key={s.id} source={s} readingDays={readingDays} />
       ))}
-      <InfoBox>This preview runs on generated data that imitates a year of Oura readings. Real Oura sync comes in a later session.</InfoBox>
+      {sources.data && sources.data.length === 0 && (
+        <Card tone="muted">
+          <AppText variant="body" color="textSecondary">
+            No wearable connected yet. Connecting an Oura ring is the next step; until then you can load the demo data set below.
+          </AppText>
+        </Card>
+      )}
+      {cloud ? (
+        <InfoBox>Your data is stored in your own account and only you can read it. Oura sync is not connected yet.</InfoBox>
+      ) : (
+        <InfoBox>Demo mode: generated data that imitates a year of Oura readings, stored only on this device.</InfoBox>
+      )}
 
-      <View style={{ alignItems: 'center', marginTop: spacing.sm }}>
-        <Button label={resetting ? 'Resetting…' : 'Reset demo data'} variant="ghost" size="sm" icon="refresh" onPress={reset} disabled={resetting} />
-      </View>
+      {/* Account */}
+      <Card padding={14}>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <AppText variant="bodyStrong">{cloud ? 'Signed in' : 'Demo mode'}</AppText>
+            <AppText variant="caption" color="textSecondary" numberOfLines={1}>
+              {cloud ? auth.user?.email : auth.configured ? 'Sign in to keep your data in your account.' : 'Add Supabase keys to .env to enable accounts.'}
+            </AppText>
+          </View>
+          {cloud ? (
+            <Button label="Sign out" variant="ghost" size="sm" icon="log-out-outline" onPress={() => auth.signOut()} />
+          ) : auth.configured ? (
+            <Button label="Sign in" variant="secondary" size="sm" icon="log-in-outline" onPress={() => auth.leaveDemo()} />
+          ) : null}
+        </Row>
+      </Card>
+
+      {resetError && <InfoBox tone="warning">{`Could not load demo data: ${resetError}`}</InfoBox>}
+      {confirmLoad ? (
+        <Card tone="warning">
+          <AppText variant="bodyStrong">Replace everything in your account with the demo data set?</AppText>
+          <AppText variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
+            All your experiments, check-ins and readings are deleted first. This cannot be undone.
+          </AppText>
+          <Row style={{ marginTop: spacing.md }}>
+            <Button label="Cancel" variant="secondary" size="sm" onPress={() => setConfirmLoad(false)} style={{ flex: 1 }} />
+            <Button label="Load demo data" variant="danger" size="sm" onPress={reset} style={{ flex: 1 }} />
+          </Row>
+        </Card>
+      ) : (
+        <View style={{ alignItems: 'center', marginTop: spacing.sm }}>
+          <Button
+            label={resetting ? (cloud ? 'Loading…' : 'Resetting…') : cloud ? 'Load demo data into my account' : 'Reset demo data'}
+            variant="ghost"
+            size="sm"
+            icon="refresh"
+            onPress={cloud ? () => setConfirmLoad(true) : reset}
+            disabled={resetting}
+          />
+        </View>
+      )}
     </Screen>
   );
 }

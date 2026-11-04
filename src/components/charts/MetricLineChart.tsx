@@ -9,7 +9,7 @@
 import { scaleLinear } from 'd3-scale';
 import { curveMonotoneX, line as d3line } from 'd3-shape';
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
+import { ActivityIndicator, type GestureResponderEvent, type LayoutChangeEvent, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 
 import { formatAxisValue, formatMetricValue } from '../../domain/metrics';
@@ -51,6 +51,8 @@ interface Props {
   referenceLine?: { value: number; label: string };
   height?: number;
   lineColor?: string;
+  /** True while the readings request is in flight: shows a spinner instead of "No data". */
+  loading?: boolean;
 }
 
 const MARGIN = { top: 18, right: 12, bottom: 24, left: 38 };
@@ -68,6 +70,7 @@ export function MetricLineChart({
   flagged = [],
   referenceLine,
   height = 200,
+  loading = false,
   lineColor = colors.chartLine,
 }: Props) {
   const [width, setWidth] = useState(0);
@@ -106,9 +109,13 @@ export function MetricLineChart({
   if (!model) {
     return (
       <View style={{ height, alignItems: 'center', justifyContent: 'center' }} onLayout={onLayout}>
-        <AppText variant="caption" color="textMuted">
-          No data in this range
-        </AppText>
+        {loading ? (
+          <ActivityIndicator color={colors.primary} />
+        ) : (
+          <AppText variant="caption" color="textMuted">
+            No data in this range
+          </AppText>
+        )}
       </View>
     );
   }

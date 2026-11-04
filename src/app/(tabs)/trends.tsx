@@ -90,6 +90,7 @@ export default function TrendsScreen() {
           <MetricLineChart
             metricId={metricId}
             points={points}
+            loading={readings.loading && !readings.data}
             from={from}
             to={t}
             showRaw={showRaw}

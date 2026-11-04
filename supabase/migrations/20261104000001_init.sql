@@ -1,5 +1,5 @@
 -- N1 Lab: initial schema. Mirrors src/domain/types.ts one-to-one.
--- Not applied yet: this file is ready for `supabase db push` in the Supabase session.
+-- Applied with `npx supabase db push` (see CLAUDE.md). Later changes go in new migration files.
 -- Conventions: snake_case, every user-owned table has user_id + row-level security.
 
 create extension if not exists "pgcrypto";

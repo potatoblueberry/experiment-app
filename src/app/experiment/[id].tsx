@@ -138,6 +138,7 @@ export default function ExperimentDetailScreen() {
                 <MetricLineChart
                   metricId={om.metricId}
                   points={pts}
+                  loading={readings.loading && !readings.data}
                   from={base.startDate}
                   to={e.endDate}
                   bands={bands}

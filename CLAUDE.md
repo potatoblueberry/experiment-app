@@ -40,8 +40,12 @@ explain what you are doing in plain terms as you go, and say what you install an
 - `react-native-svg` + `d3-shape` + `d3-scale` for hand-drawn charts (no chart library; it
   keeps full control and works identically on web and native).
 - `date-fns` for date math, `expo-crypto` for UUIDs, `@expo/vector-icons` (Ionicons).
-- Planned, not wired yet: Supabase (Postgres, Auth, Edge Functions), Oura API v2 OAuth2,
-  Health Connect, Terra, push reminders.
+- **Supabase** (`@supabase/supabase-js`): Postgres + Auth. Client in `src/lib/supabase.ts`,
+  keys from `.env` (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, see
+  `.env.example`). Without keys the app silently runs in demo mode. The Supabase CLI is a
+  dev dependency (`npx supabase ...`), config in `supabase/config.toml`.
+- Planned, not wired yet: Oura API v2 OAuth2 (Edge Function), Health Connect, Terra,
+  push reminders.
 
 ## Running the app
 
@@ -53,18 +57,28 @@ npm run lint           # eslint (eslint-config-expo, flat config in eslint.confi
 npm test               # jest (jest-expo preset), unit tests live in __tests__ folders
 npx expo start --clear # if Metro cache misbehaves
 
+# Supabase (one-time per machine; the first two prompt interactively, run them in a terminal)
+npx supabase login
+npx supabase link --project-ref cwayywolbegqsfepkfux
+npx supabase db push --remote   # applies supabase/migrations/*.sql not yet applied to the hosted project
+
 Run typecheck, lint and tests before declaring work done. All three pass as of 2026-11-04.
 ```
 
 Browser preview renders inside a phone-width frame (`PhoneFrame`) so the layout stays
-honest about mobile sizing. No phone, account or backend is needed. "Reset demo data" at
-the bottom of Home wipes local storage and re-seeds.
+honest about mobile sizing. Two data modes, chosen in `src/app/_layout.tsx` from the auth
+state: **demo** (LocalMockRepository, fake data on the device, no account needed) and
+**signed in** (SupabaseRepository, the user's own rows). "Reset demo data" on Home re-seeds
+the local store; in a signed-in account the same button becomes "Load demo data into my
+account" (deletes the account's rows, inserts the demo set) so the real backend can be
+exercised before Oura is connected. `.env` changes need a dev-server restart.
 
 ## Project structure
 
 ```
 src/app/                    screens; one file = one route (Expo Router)
-  _layout.tsx               providers + PhoneFrame + root Stack
+  _layout.tsx               AuthProvider -> picks repository -> PhoneFrame + guarded Stack
+  sign-in.tsx               e-mail/password sign in, create account, or continue in demo mode
   (tabs)/                   Home (index), trends, checkin, experiments
   experiment/new.tsx        5-step wizard
   experiment/[id].tsx       detail: timeline, adherence calendar, outcome charts, effect
@@ -74,9 +88,14 @@ src/domain/                 pure TypeScript, no React, no storage
   behaviors.ts              presets + suggested outcome metrics
   phases.ts                 phase builder, baseline-window recommendation, duration copy
   stats.ts                  rolling mean, baseline model, effect estimate, confounds
+src/auth/AuthProvider.tsx   session state: loading | signed_out | signed_in | demo
+src/lib/supabase.ts         the Supabase client (null when .env has no keys)
 src/data/
   repository.ts             the Repository interface — the ONLY door to data
-  LocalMockRepository.ts    AsyncStorage implementation, seeds a year of fake Oura data
+  LocalMockRepository.ts    AsyncStorage implementation, seeds the demo set on first run
+  SupabaseRepository.ts     Postgres implementation (paginates reads, chunks inserts)
+  supabase/mappers.ts       the ONLY place rows (snake_case) meet domain types (camelCase)
+  seed/demoSeed.ts          the demo data set as plain objects, shared by both repositories
   seed/generateReadings.ts  deterministic generator (seasonal wave, trend, weekday,
                             shared recovery noise, illness/travel episodes with flags,
                             fake effects during preset-based interventions)
@@ -89,7 +108,8 @@ src/components/experiments/ SourceCard, ExperimentCard, CheckInCard, EffectSumma
 src/theme/                  colours, spacing, typography, phase colours
 src/utils/dates.ts          'YYYY-MM-DD' helpers (never pass Date objects around)
 src/**/__tests__/           jest unit tests (dates, stats, phases, seed generator, repository)
-supabase/migrations/        0001_init.sql — schema + RLS, written but NOT applied yet
+supabase/migrations/        timestamped SQL files applied with `npx supabase db push`
+supabase/config.toml        Supabase CLI config (local stack settings; we use the hosted project)
 jest.setup.js               mocks AsyncStorage (in-memory) and expo-crypto for tests
 ```
 
@@ -105,13 +125,18 @@ jest.setup.js               mocks AsyncStorage (in-memory) and expo-crypto for t
 | `AdherenceLog`            | adherence_logs             | UNIQUE (experiment_id, date); upsert         |
 | `DataSourceConnection`    | data_source_connections    |                                              |
 
-TypeScript is camelCase; the database will be snake_case. The SupabaseRepository does the
-mapping in one place. Every record already carries `userId` so row-level security is a
-drop-in later.
+TypeScript is camelCase; the database is snake_case; `src/data/supabase/mappers.ts` is the
+only translation point. Every row carries `user_id` (or reaches it through
+`experiments`), and row-level security limits every query to `auth.uid()`.
 
 ## Conventions
 
-- Screens never touch storage. Screen → hook → `Repository` → implementation.
+- Screens never touch storage. Screen → hook → `Repository` → implementation. Screens
+  must work identically on both implementations; test new features in demo mode first.
+- Secrets never enter the repo or the chat: the anon key is public by design and lives in
+  `.env` (git-ignored); the Oura client secret and the service-role key live only in the
+  Supabase dashboard (Edge Function secrets). Schema changes are new files in
+  `supabase/migrations/`, never edits to applied ones.
 - Dates are `ISODate` strings in local time. One reading per metric per calendar day
   (Oura semantics: the night ending on that morning belongs to that day).
 - Statistics live in `src/domain/stats.ts` as pure functions so they can move to a server
@@ -131,10 +156,14 @@ drop-in later.
 ## Later sessions (roadmap)
 
 1. **Supabase wiring** (project ref `cwayywolbegqsfepkfux`, EU region, created 2026-11-04;
-   Oura redirect URI = `https://cwayywolbegqsfepkfux.supabase.co/functions/v1/oura-callback`): apply `supabase/migrations/0001_init.sql` (tables, enums, RLS),
-   add a service-role-only token table in 0002, write `SupabaseRepository implements
-   Repository` (camelCase ↔ snake_case mapping in one place), swap it in
-   `RepositoryProvider`. Keep `LocalMockRepository` for demo mode and tests.
+   Oura redirect URI = `https://cwayywolbegqsfepkfux.supabase.co/functions/v1/oura-callback`).
+   Done 2026-11-04: SupabaseRepository, mappers, AuthProvider, sign-in screen, demo-data
+   loader. First migration applied and the whole app verified against the live project
+   on 2026-11-04 (sign-up, demo loader, check-in upsert, wizard create, sign-out).
+   E-mail confirmation is OFF in the project's auth settings for development; turn it on
+   before anyone else uses the app. A throwaway test user (tester@n1lab.test) exists; its
+   password is in the owner's local `.env`, never in the repo. Remaining: the
+   service-role-only token table in the next migration.
 2. **Oura OAuth2** (API v2; app registered 2026-11-04 with scopes daily, heartrate, tag;
    client secret lives only in the owner's password manager and Supabase function secrets): Edge Function handles the OAuth code exchange and token
    refresh; store tokens server-side only. Initial backfill pulls as much history as the

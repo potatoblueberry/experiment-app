@@ -6,6 +6,7 @@
     "@expo/metro-runtime": "~58.0.17",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@supabase/supabase-js": "^2.118.0",
     "d3-scale": "^4.0.3",
     "d3-shape": "^3.2.1",
     "date-fns": "^4.4.0",
@@ -32,6 +33,7 @@
     "eslint-config-expo": "~58.0.4",
     "jest": "~30.5.2",
     "jest-expo": "~58.0.14",
+    "supabase": "^3.0.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
