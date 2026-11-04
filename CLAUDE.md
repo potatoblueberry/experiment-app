@@ -15,8 +15,13 @@ explain what you are doing in plain terms as you go, and say what you install an
    phase* taken from existing data, an *intervention phase*, and optionally a *washout*.
 3. **Daily loop** (the heart of the app): reminder, "did you do it today?" yes/no, optional
    journal note. Past days stay editable.
-4. **Several experiments at once** are allowed; the app flags confounds (overlapping dates
-   with shared outcome metrics).
+4. **One experiment at a time** (decision 2026-11-04). The app exists to attribute a change
+   in the data to one behaviour, so a second active experiment is refused by the wizard,
+   both repositories (`ActiveExperimentExistsError` in `src/domain/rules.ts`) and the
+   database (partial unique index, migration 0002). During an experiment the app focuses
+   on keeping the user on protocol and on that experiment's data. The remaining overlap
+   risk, a comparison window that reaches back into an earlier experiment's intervention
+   or washout, is flagged on the review step (`findBaselineContamination`).
 5. **Honest report** at the end: effect vs. baseline, adjusted for trend and day-of-week,
    with an uncertainty band.
 
@@ -44,8 +49,12 @@ explain what you are doing in plain terms as you go, and say what you install an
   keys from `.env` (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, see
   `.env.example`). Without keys the app silently runs in demo mode. The Supabase CLI is a
   dev dependency (`npx supabase ...`), config in `supabase/config.toml`.
-- Planned, not wired yet: Oura API v2 OAuth2 (Edge Function), Health Connect, Terra,
-  push reminders.
+- **Oura API v2** via three Edge Functions (Deno) in `supabase/functions/`: `oura-connect`
+  (returns the authorize URL, stores a single-use state row), `oura-callback` (code → tokens,
+  server-side only), `oura-sync` (pulls sleep / daily_readiness / daily_activity, upserts
+  `metric_readings`). Secrets `OURA_CLIENT_ID` and `OURA_CLIENT_SECRET` live only in
+  Supabase (`npx supabase secrets set ...`). Scopes: daily heartrate tag.
+- Planned, not wired yet: Health Connect, Terra, push reminders.
 
 ## Running the app
 
@@ -61,7 +70,13 @@ npx expo start --clear # if Metro cache misbehaves
 npx supabase login
 npx supabase link --project-ref cwayywolbegqsfepkfux
 npx supabase db push --remote   # applies supabase/migrations/*.sql not yet applied to the hosted project
+npx supabase functions deploy --use-api --remote=cwayywolbegqsfepkfux        # all Edge Functions
+npx supabase secrets set --remote=cwayywolbegqsfepkfux OURA_CLIENT_ID=... OURA_CLIENT_SECRET=...
+# Hosted changes ask for confirmation; the CLI refuses to answer it in an agent run, so the
+# owner runs these three in a terminal (or re-runs with --yes after agreeing).
 
+The Deno code under `supabase/functions/` is excluded from the app's tsc and eslint runs
+(different runtime); `_shared/mapReadings.ts` has no imports so Jest tests it directly.
 Run typecheck, lint and tests before declaring work done. All three pass as of 2026-11-04.
 ```
 
@@ -87,9 +102,14 @@ src/domain/                 pure TypeScript, no React, no storage
   metrics.ts                metric catalog + formatting
   behaviors.ts              presets + suggested outcome metrics
   phases.ts                 phase builder, baseline-window recommendation, duration copy
-  stats.ts                  rolling mean, baseline model, effect estimate, confounds
+  stats.ts                  rolling mean, baseline model, effect estimate, baseline contamination
+  rules.ts                  product rules shared by UI and repositories (one active experiment)
 src/auth/AuthProvider.tsx   session state: loading | signed_out | signed_in | demo
 src/lib/supabase.ts         the Supabase client (null when .env has no keys)
+src/lib/oura.ts             startOuraConnect() / syncOura() -> Edge Functions
+src/components/sources/     OuraPanel: connect, sync now, first import after ?oura=connected
+supabase/functions/         Deno Edge Functions: _shared (oura.ts, mapReadings.ts),
+                            oura-connect, oura-callback, oura-sync
 src/data/
   repository.ts             the Repository interface — the ONLY door to data
   LocalMockRepository.ts    AsyncStorage implementation, seeds the demo set on first run
@@ -164,11 +184,14 @@ only translation point. Every row carries `user_id` (or reaches it through
    before anyone else uses the app. A throwaway test user (tester@n1lab.test) exists; its
    password is in the owner's local `.env`, never in the repo. Remaining: the
    service-role-only token table in the next migration.
-2. **Oura OAuth2** (API v2; app registered 2026-11-04 with scopes daily, heartrate, tag;
-   client secret lives only in the owner's password manager and Supabase function secrets): Edge Function handles the OAuth code exchange and token
-   refresh; store tokens server-side only. Initial backfill pulls as much history as the
-   account has (daily_sleep, daily_readiness, daily_activity, heartrate/HRV summaries,
-   temperature deviation), then a scheduled incremental sync.
+2. **Oura OAuth2** (API v2; app registered 2026-11-04 with scopes daily, heartrate, tag).
+   Built 2026-11-04: migration 0003 (`oura_tokens`, `oauth_states`, sync columns), the three
+   Edge Functions, OuraPanel in the app. Flow: Connect Oura → oura-connect → Oura login →
+   oura-callback stores tokens and redirects to the app with `?oura=connected` → the app
+   runs a full sync (2 years back, 120-day chunks, next_token paging; Oura returns nothing
+   before the account existed) → later "Sync now" is incremental (restarts 7 days before
+   `synced_through`). Still to do: a scheduled nightly sync (pg_cron or a cron-triggered
+   function), `heartrate` time series, Oura tags → `flags`.
 3. **Real sync + flags**: detect illness (temperature deviation spike) and travel
    automatically and set `MetricReading.flags`; let the user mark/unmark days.
 4. **Push reminders**: `expo-notifications`, one evening reminder per day while any

@@ -8,6 +8,7 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
 
 import { METRIC_LIST } from '../domain/metrics';
+import { ActiveExperimentExistsError } from '../domain/rules';
 import type {
   AdherenceLog,
   CreateExperimentInput,
@@ -114,7 +115,10 @@ export class SupabaseRepository implements Repository {
     const detail = materializeExperiment(input, 'active', this.userId);
     // Three inserts, parent first. If a child insert fails, remove the parent so
     // no half-built experiment is left behind (cascade deletes any children).
-    unwrap(await this.client.from('experiments').insert(experimentToRow(stripDetail(detail))).select('id'), 'create experiment');
+    // The database also refuses a second active experiment (partial unique index).
+    const parent = await this.client.from('experiments').insert(experimentToRow(stripDetail(detail))).select('id');
+    if (parent.error?.code === '23505') throw new ActiveExperimentExistsError();
+    unwrap(parent, 'create experiment');
     try {
       unwrap(await this.client.from('experiment_phases').insert(detail.phases.map(phaseToRow)).select('id'), 'create phases');
       unwrap(await this.client.from('experiment_outcome_metrics').insert(detail.outcomeMetrics.map(outcomeMetricToRow)).select('id'), 'create outcome metrics');

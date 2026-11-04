@@ -116,6 +116,9 @@ export interface DataSourceConnection {
   provider: DataSourceProvider;
   status: 'connected' | 'disconnected' | 'error';
   lastSyncAt: ISODateTime | null;
+  /** Last day the provider sync covered; the next incremental sync starts a week before it. */
+  syncedThrough?: ISODate | null;
+  lastError?: string | null;
 }
 
 // ---------------------------------------------------------------------------

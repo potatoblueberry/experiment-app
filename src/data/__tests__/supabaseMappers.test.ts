@@ -36,7 +36,7 @@ describe('supabase mappers', () => {
     const a = seed.adherence[0];
     expect(rowToAdherence(adherenceToRow(a))).toEqual(a);
     const s = seed.sources[0];
-    expect(rowToSource(sourceToRow(s))).toEqual(s);
+    expect(rowToSource(sourceToRow(s))).toEqual({ ...s, syncedThrough: null, lastError: null });
   });
 
   it('drops the local id on readings and keeps everything else', () => {
